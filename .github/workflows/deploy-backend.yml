@@ -1,0 +1,88 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'staging' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+        run: |
+          docker build -t $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG \
+            -t $ECR_REGISTRY/mindlift-backend:$ENVIRONMENT-latest \
+            ./backend
+          docker push $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/mindlift-backend:$ENVIRONMENT-latest
+
+      - name: Run Alembic migrations
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          REFRESH_TOKEN_SECRET: ${{ secrets.REFRESH_TOKEN_SECRET }}
+        run: |
+          docker run --rm \
+            -e DATABASE_URL=$DATABASE_URL \
+            -e JWT_SECRET=$JWT_SECRET \
+            -e REFRESH_TOKEN_SECRET=$REFRESH_TOKEN_SECRET \
+            $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG \
+            alembic upgrade head
+
+      - name: Deploy to EC2 via SSM
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+          IMAGE_TAG: ${{ github.sha }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          aws ssm send-command \
+            --targets "Key=tag:Environment,Values=$ENVIRONMENT" \
+            --document-name "AWS-RunShellScript" \
+            --parameters commands=[
+              "docker pull $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG",
+              "docker stop mindlift-api || true",
+              "docker rm mindlift-api || true",
+              "docker run -d --name mindlift-api --restart unless-stopped -p 8000:8000 --env-file /etc/mindlift/.env $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4",
+              "docker stop mindlift-worker || true",
+              "docker rm mindlift-worker || true",
+              "docker run -d --name mindlift-worker --restart unless-stopped --env-file /etc/mindlift/.env $ECR_REGISTRY/mindlift-backend:$IMAGE_TAG celery -A app.worker worker --loglevel=info"
+            ]
+
+      - name: Notify deployment
+        if: always()
+        run: echo "Deployment to ${{ github.event.inputs.environment || 'staging' }} ${{ job.status }}"
