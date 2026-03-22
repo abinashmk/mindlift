@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Mobile
+mobile/.expo/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/ios/Pods/
+mobile/ios/build/
+*.keystore
+!debug.keystore
+
+# Build output
+dashboard/build/
+dashboard/dist/
+backend/dist/
+
+# Testing
+coverage/
+.pytest_cache/
+htmlcov/
+
+# Docker
+*.override.yml
+
+# Secrets
+*.pem
+*.key
+secrets/
