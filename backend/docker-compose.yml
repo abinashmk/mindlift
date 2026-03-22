@@ -1,0 +1,72 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mindlift_postgres
+    environment:
+      POSTGRES_USER: mindlift
+      POSTGRES_PASSWORD: mindlift_secret
+      POSTGRES_DB: mindlift_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mindlift -d mindlift_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mindlift_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: mindlift_app
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mindlift:mindlift_secret@postgres:5432/mindlift_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production-use-a-long-random-string
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build: .
+    container_name: mindlift_celery
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mindlift:mindlift_secret@postgres:5432/mindlift_db
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: change-me-in-production-use-a-long-random-string
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: celery -A app.worker.tasks worker --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
