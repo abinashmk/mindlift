@@ -23,6 +23,8 @@ class User(Base):
     first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     timezone: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="ONBOARDING")
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

@@ -64,6 +64,30 @@ def create_refresh_token(user_id: str) -> str:
     )
 
 
+def create_mfa_token(user_id: str) -> str:
+    """Short-lived token issued after password check, before TOTP verification."""
+    return _make_token(
+        {"sub": user_id, "type": "mfa_pending"},
+        timedelta(minutes=5),
+    )
+
+
+def create_support_access_token(support_user_id: str, role: str) -> str:
+    """Access token for support dashboard users, includes role claim."""
+    return _make_token(
+        {"sub": support_user_id, "type": "support_access", "role": role},
+        timedelta(hours=8),
+    )
+
+
+def create_support_mfa_pending_token(support_user_id: str) -> str:
+    """Short-lived token issued to support user after password check, before MFA."""
+    return _make_token(
+        {"sub": support_user_id, "type": "support_mfa_pending"},
+        timedelta(minutes=5),
+    )
+
+
 def decode_token(token: str) -> dict:
     """Decode and validate a JWT. Raises JWTError on failure."""
     return jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])

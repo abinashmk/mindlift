@@ -2,10 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routers import auth, chat, devices, escalations, interventions, metrics, users
+from app.routers import risk, account, support
 
 
 @asynccontextmanager
@@ -35,14 +35,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(devices.router)
-app.include_router(metrics.router)
-app.include_router(interventions.router)
-app.include_router(chat.router)
-app.include_router(escalations.router)
+# End-user API routers (prefixed under /v1)
+_V1_PREFIX = "/v1"
+app.include_router(auth.router, prefix=_V1_PREFIX)
+app.include_router(users.router, prefix=_V1_PREFIX)
+app.include_router(devices.router, prefix=_V1_PREFIX)
+app.include_router(metrics.router, prefix=_V1_PREFIX)
+app.include_router(interventions.router, prefix=_V1_PREFIX)
+app.include_router(chat.router, prefix=_V1_PREFIX)
+app.include_router(escalations.router, prefix=_V1_PREFIX)
+app.include_router(risk.router, prefix=_V1_PREFIX)
+app.include_router(account.router, prefix=_V1_PREFIX)
+
+# Support dashboard API router
+app.include_router(support.router, prefix=_V1_PREFIX)
 
 
 @app.get("/health", tags=["health"])

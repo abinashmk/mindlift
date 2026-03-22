@@ -19,6 +19,7 @@ class SupportUser(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(String(30), nullable=False)
+    mfa_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

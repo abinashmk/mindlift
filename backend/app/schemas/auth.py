@@ -47,3 +47,9 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+
+class MFAVerifyRequest(BaseModel):
+    """End-user TOTP verification after login when MFA is enabled."""
+    mfa_token: str  # short-lived token issued after password check
+    otp_code: str   # 6-digit TOTP code from authenticator app

@@ -8,7 +8,15 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import all models so Alembic can detect them.
 from app.database import Base  # noqa: F401
-import app.models  # noqa: F401
+import app.models  # noqa: F401 — triggers __init__.py which imports every model module
+import app.models.user  # noqa: F401
+import app.models.device  # noqa: F401
+import app.models.metrics  # noqa: F401
+import app.models.risk  # noqa: F401
+import app.models.intervention  # noqa: F401
+import app.models.chat  # noqa: F401
+import app.models.escalation  # noqa: F401
+import app.models.support  # noqa: F401
 
 config = context.config
 

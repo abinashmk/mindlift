@@ -201,3 +201,222 @@ def send_push_notification(user_id: str, title: str, body: str, data: dict | Non
     """
     print(f"[push] user={user_id} title={title!r} body={body!r} data={data}")
     return {"status": "stub_sent"}
+
+
+@celery_app.task(name="app.worker.tasks.compute_risk_assessment", bind=True, max_retries=3)
+def compute_risk_assessment(self, user_id: str):
+    """
+    Compute a risk assessment for a single user on demand.
+    Used when a new daily metric is submitted outside the nightly batch window.
+    """
+
+    async def _run():
+        from datetime import date
+
+        from sqlalchemy import select
+
+        from app.database import AsyncSessionLocal
+        from app.models.metrics import Baseline, DailyMetric
+        from app.models.risk import RiskAssessment
+        from app.models.user import User
+        from app.services.intervention_selector import select_interventions
+        from app.services.risk_engine import BaselineEntry, compute_risk
+
+        uid = uuid.UUID(user_id)
+        today = date.today()
+
+        async with AsyncSessionLocal() as db:
+            user_result = await db.execute(select(User).where(User.id == uid))
+            user = user_result.scalar_one_or_none()
+            if not user or user.deleted_at is not None:
+                return {"status": "skipped", "reason": "user_not_found"}
+
+            metric_result = await db.execute(
+                select(DailyMetric).where(
+                    DailyMetric.user_id == uid,
+                    DailyMetric.metric_date == today,
+                )
+            )
+            metric: DailyMetric | None = metric_result.scalar_one_or_none()
+            if not metric:
+                return {"status": "skipped", "reason": "no_metric_for_today"}
+
+            bl_result = await db.execute(select(Baseline).where(Baseline.user_id == uid))
+            baselines: dict[str, BaselineEntry] = {
+                b.feature_key: BaselineEntry(
+                    mean=b.mean_value, std=b.std_value, valid_days=b.valid_days
+                )
+                for b in bl_result.scalars().all()
+            }
+
+            risk_result = compute_risk(
+                sleep_hours=metric.sleep_hours,
+                steps=metric.steps,
+                screen_time_minutes=metric.screen_time_minutes,
+                resting_heart_rate_bpm=metric.resting_heart_rate_bpm,
+                average_heart_rate_bpm=metric.average_heart_rate_bpm,
+                hrv_ms=metric.hrv_ms,
+                location_home_ratio=metric.location_home_ratio,
+                location_transitions=metric.location_transitions,
+                mood_score=metric.mood_score,
+                communication_count=metric.communication_count,
+                baselines=baselines,
+            )
+
+            now = datetime.now(timezone.utc)
+            assessment = RiskAssessment(
+                id=uuid.uuid4(),
+                user_id=uid,
+                assessment_time=now,
+                assessment_scope="intraday",
+                risk_score=risk_result.risk_score,
+                risk_level=risk_result.risk_level.value,
+                feature_sleep_score=risk_result.feature_sleep_score,
+                feature_activity_score=risk_result.feature_activity_score,
+                feature_heart_score=risk_result.feature_heart_score,
+                feature_social_score=risk_result.feature_social_score,
+                contributing_features=risk_result.contributing_features,
+                model_version=risk_result.model_version,
+                baseline_complete=risk_result.baseline_complete,
+                created_at=now,
+            )
+            db.add(assessment)
+
+            await select_interventions(user, risk_result, db)
+            await db.commit()
+
+        return {"status": "done", "risk_level": risk_result.risk_level.value}
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=30)
+
+
+@celery_app.task(name="app.worker.tasks.run_nightly_baseline_update", bind=True, max_retries=3)
+def run_nightly_baseline_update(self):
+    """
+    Alias / explicit export for the nightly baseline recompute task.
+    Delegates to nightly_baseline_recompute.
+    """
+    return nightly_baseline_recompute()
+
+
+@celery_app.task(name="app.worker.tasks.process_account_deletion", bind=True, max_retries=3)
+def process_account_deletion(self, user_id: str):
+    """
+    Permanently purge all data associated with a deleted user.
+    The user record itself is soft-deleted first by the API; this task removes
+    dependent data (metrics, baselines, chat, devices, etc.).
+    """
+
+    async def _run():
+        from sqlalchemy import delete, select
+
+        from app.database import AsyncSessionLocal
+        from app.models.chat import ChatMessage, ChatSession
+        from app.models.device import Device
+        from app.models.escalation import Escalation, EscalationContact
+        from app.models.intervention import InterventionEvent
+        from app.models.metrics import Baseline, DailyMetric
+        from app.models.risk import RiskAssessment
+        from app.models.user import User, UserConsent
+
+        uid = uuid.UUID(user_id)
+
+        async with AsyncSessionLocal() as db:
+            # Remove all dependent data; the user row itself is kept (soft-deleted)
+            # so audit trails referencing the user_id remain intact.
+            # Chat messages — must delete before sessions due to FK
+            sessions_result = await db.execute(
+                select(ChatSession.id).where(ChatSession.user_id == uid)
+            )
+            session_ids = sessions_result.scalars().all()
+            if session_ids:
+                await db.execute(
+                    delete(ChatMessage).where(ChatMessage.session_id.in_(session_ids))
+                )
+            await db.execute(delete(ChatSession).where(ChatSession.user_id == uid))
+
+            # Remaining dependent tables
+            for model in (
+                DailyMetric,
+                Baseline,
+                RiskAssessment,
+                InterventionEvent,
+                EscalationContact,
+                Escalation,
+                Device,
+                UserConsent,
+            ):
+                await db.execute(delete(model).where(model.user_id == uid))  # type: ignore[attr-defined]
+
+            # Null-out PII on the user row
+            user_result = await db.execute(select(User).where(User.id == uid))
+            user = user_result.scalar_one_or_none()
+            if user:
+                user.email = f"deleted_{uid}@deleted.invalid"
+                user.password_hash = ""
+                user.first_name = None
+                user.mfa_secret = None
+
+            await db.commit()
+
+        return {"status": "done", "user_id": user_id}
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
+
+
+@celery_app.task(name="app.worker.tasks.generate_export_zip", bind=True, max_retries=3)
+def generate_export_zip(self, user_id: str):
+    """
+    Generate a GDPR-compliant data export for the user and log the result.
+    In production, upload the ZIP to S3/presigned URL and notify the user.
+    """
+
+    async def _run():
+        import json
+
+        from sqlalchemy import select
+
+        from app.database import AsyncSessionLocal
+        from app.models.chat import ChatSession
+        from app.models.intervention import InterventionEvent
+        from app.models.metrics import DailyMetric
+        from app.models.risk import RiskAssessment
+        from app.models.user import User, UserConsent
+
+        uid = uuid.UUID(user_id)
+
+        async with AsyncSessionLocal() as db:
+            user_result = await db.execute(select(User).where(User.id == uid))
+            user = user_result.scalar_one_or_none()
+            if not user:
+                return {"status": "skipped", "reason": "user_not_found"}
+
+            metrics_result = await db.execute(
+                select(DailyMetric).where(DailyMetric.user_id == uid)
+            )
+            consents_result = await db.execute(
+                select(UserConsent).where(UserConsent.user_id == uid)
+            )
+
+            export_data = {
+                "user_id": user_id,
+                "email": user.email,
+                "metrics_count": len(metrics_result.scalars().all()),
+                "consents_count": len(consents_result.scalars().all()),
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        # Stub: log export summary; wire to real storage in production.
+        print(f"[export] user={user_id} export={json.dumps(export_data)}")
+        return {"status": "done", "user_id": user_id}
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)

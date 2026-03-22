@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,24 @@ async def list_active_interventions(
     return result.scalars().all()
 
 
+@router.get("/events", response_model=list[InterventionEventResponse])
+async def list_intervention_events(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the current user's intervention events, newest first."""
+    result = await db.execute(
+        select(InterventionEvent)
+        .where(InterventionEvent.user_id == current_user.id)
+        .order_by(InterventionEvent.triggered_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
 @router.patch("/events/{event_id}", response_model=InterventionEventResponse)
 async def update_event(
     event_id: uuid.UUID,
@@ -51,6 +69,76 @@ async def update_event(
         event.completed = payload.completed
     if payload.helpful_rating is not None:
         event.helpful_rating = payload.helpful_rating
+    event.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return event
+
+
+# ---------------------------------------------------------------------------
+# Convenience action endpoints
+# ---------------------------------------------------------------------------
+
+
+async def _get_event_for_user(
+    event_id: uuid.UUID,
+    user: User,
+    db: AsyncSession,
+) -> InterventionEvent:
+    result = await db.execute(
+        select(InterventionEvent).where(
+            InterventionEvent.id == event_id,
+            InterventionEvent.user_id == user.id,
+        )
+    )
+    event: InterventionEvent | None = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Intervention event not found.")
+    return event
+
+
+@router.post("/events/{event_id}/view", response_model=InterventionEventResponse)
+async def view_event(
+    event_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an intervention event as VIEWED."""
+    event = await _get_event_for_user(event_id, current_user, db)
+    event.status = "VIEWED"
+    event.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return event
+
+
+@router.post("/events/{event_id}/complete", response_model=InterventionEventResponse)
+async def complete_event(
+    event_id: uuid.UUID,
+    helpful_rating: int | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an intervention event as COMPLETED with optional helpfulness rating (1-5)."""
+    if helpful_rating is not None and not (1 <= helpful_rating <= 5):
+        raise HTTPException(status_code=422, detail="helpful_rating must be between 1 and 5.")
+    event = await _get_event_for_user(event_id, current_user, db)
+    event.status = "COMPLETED"
+    event.completed = True
+    if helpful_rating is not None:
+        event.helpful_rating = helpful_rating
+    event.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return event
+
+
+@router.post("/events/{event_id}/dismiss", response_model=InterventionEventResponse)
+async def dismiss_event(
+    event_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an intervention event as DISMISSED."""
+    event = await _get_event_for_user(event_id, current_user, db)
+    event.status = "DISMISSED"
     event.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return event
