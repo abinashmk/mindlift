@@ -1,5 +1,6 @@
 import {Platform, PermissionsAndroid, Permission} from 'react-native';
 import {PermissionResults} from '@/types';
+import {requestHealthPermissions} from './healthService';
 
 // On iOS these would use react-native-permissions in a real app.
 // For this implementation we provide the full service interface
@@ -49,14 +50,9 @@ export const permissionService = {
   },
 
   async requestHealth(): Promise<boolean> {
-    if (Platform.OS === 'android') {
-      const bodySensors = await requestAndroid(
-        PermissionsAndroid.PERMISSIONS.BODY_SENSORS,
-      );
-      return bodySensors;
-    }
-    // iOS: HealthKit — native module required
-    return false;
+    // Delegate to the platform-specific health service (HealthKit on iOS,
+    // Health Connect on Android). The platform file is resolved by Metro.
+    return requestHealthPermissions();
   },
 
   async requestLocation(): Promise<boolean> {
