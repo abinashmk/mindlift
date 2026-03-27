@@ -38,7 +38,10 @@ async def register_user(payload: RegisterRequest, db: AsyncSession) -> User:
     if not payload.age_confirmed_18_plus:
         raise HTTPException(status_code=400, detail="Must confirm age 18+ to register.")
 
-    validate_password_strength(payload.password)
+    try:
+        validate_password_strength(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     result = await db.execute(select(User).where(User.email == payload.email))
     if result.scalar_one_or_none():

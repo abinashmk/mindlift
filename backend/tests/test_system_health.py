@@ -53,7 +53,7 @@ async def admin_support_user(db_session: AsyncSession) -> SupportUser:
         updated_at=now,
     )
     db_session.add(user)
-    await db_session.flush()
+    await db_session.commit()
     return user
 
 
@@ -104,7 +104,7 @@ async def test_system_health_counts_open_escalations(
     # Create an escalation
     await client.post(
         "/v1/escalations",  # correct /v1 prefix
-        json={"source": "manual", "risk_level": "YELLOW", "packet": {}},
+        json={"source": "manual_user_request", "risk_level": "YELLOW", "packet": {}},
         headers=auth_headers,
     )
 
@@ -131,7 +131,7 @@ async def test_system_health_non_admin_forbidden(
         updated_at=now,
     )
     db_session.add(agent)
-    await db_session.flush()
+    await db_session.commit()
 
     token = create_support_access_token(str(agent.id), "support_agent")
     headers = {"Authorization": f"Bearer {token}"}

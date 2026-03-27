@@ -14,7 +14,7 @@ async def write_audit_log(
     action_key: str,
     entity_type: str,
     entity_id: uuid.UUID | None = None,
-    metadata: dict | None = None,
+    extra: dict | None = None,
 ) -> AuditLog:
     """Persist an immutable audit log entry. Always call before committing the outer transaction."""
     log = AuditLog(
@@ -24,7 +24,7 @@ async def write_audit_log(
         action_key=action_key,
         entity_type=entity_type,
         entity_id=entity_id,
-        extra=metadata or {},
+        extra=extra or {},
         created_at=datetime.now(timezone.utc),
     )
     db.add(log)

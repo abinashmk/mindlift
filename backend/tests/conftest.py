@@ -20,19 +20,19 @@ from app.core.security import hash_password, create_access_token
 
 TEST_DB_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "sqlite+aiosqlite:///:memory:",
+    os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:"),
 )
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def engine():
-    engine = create_async_engine(TEST_DB_URL, echo=False)
-    async with engine.begin() as conn:
+    eng = create_async_engine(TEST_DB_URL, echo=False)
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
+    yield eng
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    await eng.dispose()
 
 
 @pytest_asyncio.fixture
@@ -40,7 +40,7 @@ async def db_session(engine):
     session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
-        await session.rollback()
+        await session.commit()
 
 
 @pytest_asyncio.fixture

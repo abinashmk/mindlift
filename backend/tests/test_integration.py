@@ -132,7 +132,7 @@ async def test_compute_initial_baseline(db_session: AsyncSession, test_user: Use
             updated_at=now,
         )
         db_session.add(m)
-    await db_session.flush()
+    await db_session.commit()
 
     await compute_initial_baseline(test_user.id, db_session)
 
@@ -213,7 +213,7 @@ async def test_select_interventions_yellow_creates_event(
         updated_at=now,
     )
     db_session.add(intervention)
-    await db_session.flush()
+    await db_session.commit()
 
     # Build a YELLOW risk result with sleep as the dominant score
     risk_result = compute_risk(
@@ -257,7 +257,7 @@ async def test_manual_escalation(client: AsyncClient, auth_headers: dict):
     resp = await client.post(
         "/v1/escalations",
         json={
-            "source": "manual",
+            "source": "manual_user_request",
             "risk_level": "ORANGE",
             "packet": {"note": "User requested escalation via app."},
         },
@@ -265,7 +265,7 @@ async def test_manual_escalation(client: AsyncClient, auth_headers: dict):
     )
     assert resp.status_code == 201
     data = resp.json()
-    assert data["source"] == "manual"
+    assert data["source"] == "manual_user_request"
     assert data["status"] == "NEW"
     assert data["risk_level"] == "ORANGE"
 
@@ -276,7 +276,7 @@ async def test_manual_escalation_sets_user_state_escalated(
     """Creating an escalation must transition user state to ESCALATED (unless CRISIS)."""
     resp = await client.post(
         "/v1/escalations",
-        json={"source": "manual", "risk_level": "RED", "packet": {}},
+        json={"source": "manual_user_request", "risk_level": "RED", "packet": {}},
         headers=auth_headers,
     )
     assert resp.status_code == 201
@@ -297,12 +297,12 @@ async def test_crisis_blocks_chat_input(
     # Set user to CRISIS
     test_user.state = "CRISIS"
     test_user.updated_at = datetime.now(timezone.utc)
-    await db_session.flush()
+    await db_session.commit()
 
     # Create a chat session first
     sess_resp = await client.post(
         "/v1/chat/sessions",
-        json={"initial_state": "active"},
+        json={"initial_state": "IDLE"},
         headers=auth_headers,
     )
     assert sess_resp.status_code == 201
