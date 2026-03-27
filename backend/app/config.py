@@ -35,6 +35,24 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     emails_from_email: str = "noreply@mindlift.app"
 
+    # App URLs (used in emails and deep links)
+    app_base_url: str = "http://localhost:8081"
+    dashboard_base_url: str = "http://localhost:3000"
+
+    # AWS
+    aws_region: str = "us-east-1"
+    aws_s3_bucket: str = "mindlift-exports"
+
+    # Push notifications — APNs (iOS)
+    apns_key_id: str = ""          # 10-char Key ID from Apple Developer portal
+    apns_team_id: str = ""         # 10-char Team ID
+    apns_bundle_id: str = "app.mindlift"
+    apns_auth_key_pem: str = ""    # Contents of the .p8 private key file (ES256)
+    apns_use_sandbox: bool = True  # False in production
+
+    # Push notifications — FCM (Android)
+    fcm_server_key: str = ""       # Firebase Cloud Messaging server key
+
     # CORS
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]
 

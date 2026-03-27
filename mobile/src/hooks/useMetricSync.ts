@@ -6,10 +6,14 @@ import {metricsApi} from '@/api/metrics';
 import {localQueue} from '@/services/localQueue';
 import {readDailyHealthData, isHealthDataAvailable} from '@/services/healthService';
 import {getDailyStepCount} from '@/services/motionService';
+import {getTodayScreenTimeMinutes} from '@/services/screenTimeService';
+import {sampleLocationAndAggregate} from '@/services/locationService';
+import {getAmbientNoiseLevel} from '@/services/ambientNoiseService';
+import {inferSleepHours} from '@/services/inferredSleepService';
+import {getCollectionIntervalMs, getRetryIntervalMs} from '@/services/pollingService';
 import {DailyMetrics} from '@/types';
 import {todayISODate} from '@/utils/formatters';
 
-const RETRY_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Collect today's sensor data, merge with any manually entered Redux state, and
@@ -29,6 +33,7 @@ const RETRY_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 async function collectDailyMetrics(
   moodScore: number | null,
   communicationCount: number | null,
+  consents: {health: boolean; location: boolean; noise: boolean},
 ): Promise<DailyMetrics> {
   const today = new Date();
   const metricDate = todayISODate();
@@ -42,7 +47,7 @@ async function collectDailyMetrics(
   let sleepSource: DailyMetrics['sleep_source'] = 'unknown';
 
   try {
-    const available = await isHealthDataAvailable();
+    const available = consents.health && await isHealthDataAvailable();
     if (available) {
       const healthData = await readDailyHealthData(today);
       healthSteps = healthData.steps;
@@ -60,6 +65,18 @@ async function collectDailyMetrics(
     console.warn('[useMetricSync] Health framework read failed:', err);
   }
 
+  // ── Inferred sleep fallback (spec §18.5) ──────────────────────────────────
+  // Only run when the health framework returned no sleep data.
+  if (sleepHours === null) {
+    try {
+      const inferred = await inferSleepHours(today);
+      sleepHours = inferred.sleep_hours;
+      sleepSource = inferred.sleep_source;
+    } catch (err) {
+      console.warn('[useMetricSync] Sleep inference failed:', err);
+    }
+  }
+
   // ── Pedometer fallback for steps ──────────────────────────────────────────
   let steps = healthSteps;
   if (steps === null) {
@@ -67,6 +84,37 @@ async function collectDailyMetrics(
       steps = await getDailyStepCount(today);
     } catch (err) {
       console.warn('[useMetricSync] Pedometer fallback failed:', err);
+    }
+  }
+
+  // ── Screen time (Android UsageStatsManager; null on iOS) ──────────────────
+  let screenTimeMinutes: number | null = null;
+  try {
+    screenTimeMinutes = await getTodayScreenTimeMinutes();
+  } catch (err) {
+    console.warn('[useMetricSync] Screen time read failed:', err);
+  }
+
+  // ── Location category aggregates (consent-gated) ──────────────────────────
+  let locationHomeRatio: number | null = null;
+  let locationTransitions: number | null = null;
+  if (consents.location) {
+    try {
+      const loc = await sampleLocationAndAggregate();
+      locationHomeRatio = loc.location_home_ratio;
+      locationTransitions = loc.location_transitions;
+    } catch (err) {
+      console.warn('[useMetricSync] Location sample failed:', err);
+    }
+  }
+
+  // ── Ambient noise (consent-gated) ─────────────────────────────────────────
+  let noiseLevelDb: number | null = null;
+  if (consents.noise) {
+    try {
+      noiseLevelDb = await getAmbientNoiseLevel();
+    } catch (err) {
+      console.warn('[useMetricSync] Ambient noise read failed:', err);
     }
   }
 
@@ -79,14 +127,13 @@ async function collectDailyMetrics(
     hrv_ms: hrv,
     sleep_hours: sleepHours,
     sleep_source: sleepSource,
+    screen_time_minutes: screenTimeMinutes,
+    location_home_ratio: locationHomeRatio,
+    location_transitions: locationTransitions,
+    noise_level_db_avg: noiseLevelDb,
     // Fields not collected by sensors — provided from Redux (manual entry)
     mood_score: moodScore,
     communication_count: communicationCount,
-    // Fields handled by other services (not collected here)
-    screen_time_minutes: null,
-    location_home_ratio: null,
-    location_transitions: null,
-    noise_level_db_avg: null,
   };
 
   return metrics;
@@ -94,7 +141,7 @@ async function collectDailyMetrics(
 
 export function useMetricSync() {
   const dispatch = useAppDispatch();
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Read manually entered metrics from Redux so they can be merged into the
   // health-framework payload before upload.
@@ -104,6 +151,11 @@ export function useMetricSync() {
   const communicationCount = useAppSelector(
     state => state.metrics.todayMetrics?.communication_count ?? null,
   );
+
+  // Consent flags — collection stops immediately when a consent is revoked (spec §10.4).
+  const consentHealth = useAppSelector(state => state.consents.health_data_accepted);
+  const consentLocation = useAppSelector(state => state.consents.location_category_accepted);
+  const consentNoise = useAppSelector(state => state.consents.noise_level_accepted);
 
   const syncQueue = useCallback(async () => {
     // Prune stale entries and warn if any were dropped
@@ -117,7 +169,11 @@ export function useMetricSync() {
 
     // ── Collect and enqueue today's metrics ──────────────────────────────────
     try {
-      const todayMetrics = await collectDailyMetrics(moodScore, communicationCount);
+      const todayMetrics = await collectDailyMetrics(moodScore, communicationCount, {
+        health: consentHealth,
+        location: consentLocation,
+        noise: consentNoise,
+      });
       localQueue.enqueue(todayMetrics.metric_date, todayMetrics);
     } catch (err) {
       console.warn('[MetricSync] Failed to collect daily metrics:', err);
@@ -147,11 +203,25 @@ export function useMetricSync() {
     syncQueue();
   }, [dispatch, syncQueue]);
 
-  // Retry on interval
+  // Retry on adaptive interval (battery / background / offline aware, spec §18.3)
   useEffect(() => {
-    intervalRef.current = setInterval(syncQueue, RETRY_INTERVAL_MS);
+    let active = true;
+
+    async function scheduleNext() {
+      if (!active) return;
+      const intervalMs = await getCollectionIntervalMs();
+      intervalRef.current = setTimeout(async () => {
+        if (!active) return;
+        await syncQueue();
+        scheduleNext();
+      }, intervalMs);
+    }
+
+    scheduleNext();
+
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      active = false;
+      if (intervalRef.current) clearTimeout(intervalRef.current);
     };
   }, [syncQueue]);
 

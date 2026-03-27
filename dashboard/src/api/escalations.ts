@@ -27,7 +27,7 @@ export async function fetchEscalations(
   params: FetchEscalationsParams = {},
 ): Promise<PaginatedResponse<Escalation>> {
   const response = await apiClient.get<PaginatedResponse<Escalation>>(
-    '/api/v1/support/escalations',
+    '/v1/support/escalations',
     { params },
   )
   return response.data
@@ -38,7 +38,7 @@ export async function fetchEscalations(
  */
 export async function fetchEscalation(id: string): Promise<Escalation> {
   const response = await apiClient.get<Escalation>(
-    `/api/v1/support/escalations/${id}`,
+    `/v1/support/escalations/${id}`,
   )
   return response.data
 }
@@ -51,7 +51,7 @@ export async function transitionEscalation(
   body: TransitionEscalationRequest,
 ): Promise<Escalation> {
   const response = await apiClient.post<Escalation>(
-    `/api/v1/support/escalations/${id}/transition`,
+    `/v1/support/escalations/${id}/status`,
     body,
   )
   return response.data
@@ -65,7 +65,7 @@ export async function assignEscalation(
   body: AssignEscalationRequest,
 ): Promise<Escalation> {
   const response = await apiClient.post<Escalation>(
-    `/api/v1/support/escalations/${id}/assign`,
+    `/v1/support/escalations/${id}/assign`,
     body,
   )
   return response.data
@@ -78,7 +78,7 @@ export async function sendTemplateMessage(
   body: SendTemplateMessageRequest,
 ): Promise<void> {
   await apiClient.post(
-    `/api/v1/support/escalations/${body.escalation_id}/messages`,
+    `/v1/support/escalations/${body.escalation_id}/message`,
     { template_key: body.template_key },
   )
 }
@@ -90,7 +90,7 @@ export async function fetchAgents(): Promise<
   Array<{ id: string; email: string }>
 > {
   const response = await apiClient.get<Array<{ id: string; email: string }>>(
-    '/api/v1/support/agents',
+    '/v1/support/agents',
   )
   return response.data
 }

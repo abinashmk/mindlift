@@ -357,7 +357,7 @@ async def update_escalation_status(
         action_key="escalation.status_changed",
         entity_type="escalation",
         entity_id=escalation.id,
-        metadata={"new_status": payload.status},
+        extra={"new_status": payload.status},
     )
     await db.flush()
     return escalation
@@ -401,7 +401,7 @@ async def assign_escalation(
         action_key="escalation.assigned",
         entity_type="escalation",
         entity_id=escalation.id,
-        metadata={"assigned_to": str(payload.agent_id)},
+        extra={"assigned_to": str(payload.agent_id)},
     )
     await db.flush()
     return escalation
@@ -449,7 +449,7 @@ async def send_template_message(
         action_key="escalation.message_sent",
         entity_type="escalation",
         entity_id=escalation.id,
-        metadata={"template_key": payload.template_key, "message": message_text},
+        extra={"template_key": payload.template_key, "message": message_text},
     )
     await db.flush()
 
@@ -594,7 +594,7 @@ async def create_support_user(
         action_key="support_user.created",
         entity_type="support_user",
         entity_id=new_user.id,
-        metadata={"email": payload.email, "role": payload.role.value},
+        extra={"email": payload.email, "role": payload.role.value},
     )
     await db.flush()
     return new_user
@@ -625,7 +625,53 @@ async def deactivate_support_user(
         action_key="support_user.deactivated",
         entity_type="support_user",
         entity_id=target.id,
-        metadata={"email": target.email},
+        extra={"email": target.email},
     )
     await db.flush()
     return target
+
+
+# ─── Crisis keyword management (admin only) ───────────────────────────────────
+
+
+@router.get("/crisis-keywords", tags=["admin"])
+async def get_crisis_keywords(
+    current_support: SupportUser = Depends(_require_roles("admin")),
+):
+    """Return the current server-side crisis keyword list. Admin only."""
+    from app.services.crisis_classifier import get_crisis_keywords
+    return {"keywords": get_crisis_keywords()}
+
+
+@router.put("/crisis-keywords", tags=["admin"])
+async def update_crisis_keywords(
+    payload: dict,
+    current_support: SupportUser = Depends(_require_roles("admin")),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Overwrite the server-side crisis keyword list (spec §24.3).
+    Expects: {"keywords": ["phrase one", "phrase two", ...]}
+    Admin only. Changes take effect within 60 seconds on all workers.
+    """
+    keywords: list[str] = payload.get("keywords", [])
+    if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+        raise HTTPException(status_code=422, detail="keywords must be a list of strings.")
+    if len(keywords) == 0:
+        raise HTTPException(status_code=422, detail="keywords list must not be empty.")
+
+    from app.services.crisis_classifier import set_crisis_keywords
+    set_crisis_keywords(keywords)
+
+    await write_audit_log(
+        db,
+        actor_type="support_user",
+        actor_id=current_support.id,
+        action_key="admin.crisis_keywords_updated",
+        entity_type="system",
+        entity_id=None,
+        extra={"count": len(keywords)},
+    )
+    await db.flush()
+    return {"updated": True, "count": len(keywords)}
+

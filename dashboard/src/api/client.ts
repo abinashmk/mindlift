@@ -34,7 +34,7 @@ function onRefreshSuccess(newToken: string) {
 
 async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
   const response = await axios.post<AuthTokens>(
-    `${BASE_URL}/api/v1/auth/refresh`,
+    `${BASE_URL}/v1/support/auth/refresh`,
     { refresh_token: refreshToken },
     { headers: { 'Content-Type': 'application/json' } },
   )

@@ -24,7 +24,7 @@ async def write_audit_log(
         action_key=action_key,
         entity_type=entity_type,
         entity_id=entity_id,
-        metadata=metadata or {},
+        extra=metadata or {},
         created_at=datetime.now(timezone.utc),
     )
     db.add(log)

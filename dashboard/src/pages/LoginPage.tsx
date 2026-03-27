@@ -37,11 +37,22 @@ export function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
+  const setAuth = useAuthStore((s) => s.setAuth)
+
   const loginMutation = useMutation({
-    mutationFn: login,
-    onSuccess: (data) => {
-      setMfaToken(data.mfa_token)
-      navigate('/mfa', { state: { from } })
+    mutationFn: (values: LoginFormValues) => login(values).then(data => ({ data, email: values.email })),
+    onSuccess: ({ data, email }) => {
+      if (data.token_type === 'bearer' && data.access_token) {
+        const payload = JSON.parse(atob(data.access_token.split('.')[1]))
+        setAuth(
+          { id: payload.sub, email, role: payload.role, is_active: true, must_change_password: false, mfa_enabled: false, created_at: '', updated_at: '' },
+          { access_token: data.access_token, refresh_token: '', token_type: 'bearer', expires_in: data.expires_in ?? 28800 },
+        )
+        navigate(from)
+      } else {
+        setMfaToken(data.mfa_token ?? data.access_token)
+        navigate('/mfa', { state: { from } })
+      }
     },
     onError: (error: AxiosError<ApiError>) => {
       if (error.response?.status === 401) {

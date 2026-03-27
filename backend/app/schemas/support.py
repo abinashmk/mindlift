@@ -27,7 +27,7 @@ class SupportRole(str, Enum):
 
 
 class SupportLoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 

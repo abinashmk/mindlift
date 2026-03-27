@@ -2,10 +2,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
+from app.core.limiter import limiter
 from app.routers import auth, chat, devices, escalations, interventions, metrics, users
-from app.routers import risk, account, support
+from app.routers import risk, account, support, home
 
 
 @asynccontextmanager
@@ -25,6 +29,17 @@ app = FastAPI(
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
 )
+
+# Attach the rate limiter to the app state and register middleware/handler.
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    lambda req, exc: JSONResponse(
+        status_code=429,
+        content={"error": {"code": "RATE_LIMITED", "message": str(exc)}},
+    ),
+)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS
 app.add_middleware(
@@ -46,6 +61,7 @@ app.include_router(chat.router, prefix=_V1_PREFIX)
 app.include_router(escalations.router, prefix=_V1_PREFIX)
 app.include_router(risk.router, prefix=_V1_PREFIX)
 app.include_router(account.router, prefix=_V1_PREFIX)
+app.include_router(home.router, prefix=_V1_PREFIX)
 
 # Support dashboard API router
 app.include_router(support.router, prefix=_V1_PREFIX)

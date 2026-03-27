@@ -10,7 +10,7 @@ import {STORAGE_KEYS} from '@/utils/constants';
 
 const API_BASE_URL =
   (process.env.API_BASE_URL as string | undefined) ??
-  'https://api.mindlift.app';
+  'http://localhost:8000';
 
 let isRefreshing = false;
 let failedQueue: Array<{

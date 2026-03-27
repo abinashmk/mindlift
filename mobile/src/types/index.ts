@@ -238,6 +238,7 @@ export type MainStackParamList = {
   InterventionsList: undefined;
   InterventionDetail: {eventId: string};
   Crisis: undefined;
-  ExportRequested: undefined;
+  ExportRequested: {taskId: string};
   DeletionRequested: undefined;
+  ConsentUpdate: undefined;
 };

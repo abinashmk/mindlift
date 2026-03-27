@@ -72,6 +72,7 @@ export interface SupportUser {
   is_active: boolean
   must_change_password: boolean
   created_at: string
+  updated_at: string
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
@@ -102,8 +103,13 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  mfa_required: boolean
-  mfa_token: string
+  // Direct login (MFA disabled)
+  access_token?: string
+  token_type?: string
+  expires_in?: number
+  // MFA pending
+  mfa_token?: string
+  mfa_required?: boolean
 }
 
 export interface MfaVerifyRequest {

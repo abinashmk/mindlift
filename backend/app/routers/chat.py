@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log
+from app.core.limiter import get_user_id_or_ip, limiter
 from app.database import get_db
 from app.models.chat import ChatMessage, ChatSession
 from app.models.escalation import Escalation
@@ -62,7 +63,10 @@ async def create_session(
     response_model=ChatMessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("30/minute", key_func=get_user_id_or_ip)
 async def send_message(
+    request: Request,
+    response: Response,
     session_id: uuid.UUID,
     payload: SendMessageRequest,
     current_user: User = Depends(get_current_user),
@@ -141,7 +145,7 @@ async def send_message(
             action_key="crisis.detected",
             entity_type="chat_session",
             entity_id=session.id,
-            metadata={"user_id": str(current_user.id), "patterns": classifier_result["matched_patterns"]},
+            extra={"user_id": str(current_user.id), "patterns": classifier_result["matched_patterns"]},
         )
 
     await db.flush()

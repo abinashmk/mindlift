@@ -19,7 +19,7 @@ import {AxiosError} from 'axios';
 import {AuthStackParamList} from '@/types';
 import {authApi} from '@/api/auth';
 import {useAppDispatch} from '@/store';
-import {setMfaTempToken, setPendingEmail} from '@/store/authSlice';
+import {setMfaTempToken, setPendingEmail, loginSuccess} from '@/store/authSlice';
 import {Button} from '@/components/ui/Button';
 import {TextInput} from '@/components/ui/TextInput';
 import {
@@ -65,11 +65,27 @@ export function LoginScreen() {
         email: data.email.trim().toLowerCase(),
         password: data.password,
       });
-      dispatch(setMfaTempToken(response.data.temp_session_token));
-      dispatch(setPendingEmail(data.email.trim().toLowerCase()));
-      navigation.navigate('Mfa', {
-        tempSessionToken: response.data.temp_session_token,
-      });
+      if (response.data.token_type === 'mfa_pending') {
+        dispatch(setMfaTempToken(response.data.access_token));
+        dispatch(setPendingEmail(data.email.trim().toLowerCase()));
+        navigation.navigate('Mfa', {
+          tempSessionToken: response.data.access_token,
+        });
+      } else {
+        // Fetch profile to get userId, state, firstName
+        const {default: axiosLib} = await import('axios');
+        const profileRes = await axiosLib.get(
+          'http://localhost:8000/v1/users/me',
+          {headers: {Authorization: `Bearer ${response.data.access_token}`}},
+        );
+        dispatch(loginSuccess({
+          accessToken: response.data.access_token,
+          refreshToken: response.data.refresh_token,
+          userId: profileRes.data.id,
+          userState: profileRes.data.state,
+          firstName: profileRes.data.first_name ?? '',
+        }));
+      }
     } catch (err) {
       const axiosErr = err as AxiosError<{detail?: string}>;
       if (axiosErr.response?.status === 401) {

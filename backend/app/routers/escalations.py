@@ -46,7 +46,7 @@ async def create_escalation(
         action_key="escalation.created",
         entity_type="escalation",
         entity_id=escalation.id,
-        metadata={"source": payload.source.value, "risk_level": payload.risk_level},
+        extra={"source": payload.source.value, "risk_level": payload.risk_level},
     )
     await db.flush()
     return escalation

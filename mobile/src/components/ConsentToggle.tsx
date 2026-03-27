@@ -65,12 +65,12 @@ export function ConsentToggle({
       <Switch
         value={value}
         onValueChange={onChange}
-        disabled={disabled || required}
+        disabled={disabled}
         trackColor={{false: colors.border, true: colors.primary}}
         thumbColor="#ffffff"
         accessibilityLabel={label}
         accessibilityRole="switch"
-        accessibilityState={{checked: value, disabled: disabled || required}}
+        accessibilityState={{checked: value, disabled}}
       />
     </View>
   );

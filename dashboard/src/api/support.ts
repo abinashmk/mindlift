@@ -14,7 +14,7 @@ import type {
 
 export async function login(body: LoginRequest): Promise<LoginResponse> {
   const response = await apiClient.post<LoginResponse>(
-    '/api/v1/auth/login',
+    '/v1/support/auth/login',
     body,
   )
   return response.data
@@ -24,14 +24,14 @@ export async function verifyMfa(
   body: MfaVerifyRequest,
 ): Promise<MfaVerifyResponse> {
   const response = await apiClient.post<MfaVerifyResponse>(
-    '/api/v1/auth/mfa/verify',
+    '/v1/support/auth/mfa/verify',
     body,
   )
   return response.data
 }
 
 export async function logoutRequest(): Promise<void> {
-  await apiClient.post('/api/v1/auth/logout')
+  await apiClient.post('/v1/support/auth/logout')
 }
 
 // ─── Support Users API ────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ export async function fetchSupportUsers(params?: {
   per_page?: number
 }): Promise<PaginatedResponse<SupportUser>> {
   const response = await apiClient.get<PaginatedResponse<SupportUser>>(
-    '/api/v1/admin/users',
+    '/v1/support/users',
     { params },
   )
   return response.data
@@ -51,7 +51,7 @@ export async function createSupportUser(
   body: CreateSupportUserRequest,
 ): Promise<SupportUser> {
   const response = await apiClient.post<SupportUser>(
-    '/api/v1/admin/users',
+    '/v1/support/users',
     body,
   )
   return response.data
@@ -59,7 +59,7 @@ export async function createSupportUser(
 
 export async function deactivateSupportUser(userId: string): Promise<SupportUser> {
   const response = await apiClient.patch<SupportUser>(
-    `/api/v1/admin/users/${userId}/deactivate`,
+    `/v1/support/users/${userId}/deactivate`,
   )
   return response.data
 }
@@ -68,7 +68,7 @@ export async function deactivateSupportUser(userId: string): Promise<SupportUser
 
 export async function fetchSystemHealth(): Promise<SystemHealth> {
   const response = await apiClient.get<SystemHealth>(
-    '/api/v1/admin/system-health',
+    '/v1/support/system-health',
   )
   return response.data
 }

@@ -28,7 +28,7 @@ export function CrisisScreen() {
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
 
   const sessionId = useAppSelector(state => state.chat.sessionId);
-  const [hasTrustedContact, setHasTrustedContact] = useState(false);
+  const [trustedContactPhone, setTrustedContactPhone] = useState<string | null>(null);
 
   // Disable Android back button
   useEffect(() => {
@@ -49,9 +49,10 @@ export function CrisisScreen() {
     async function checkContacts() {
       try {
         const res = await escalationsApi.getEscalationContacts();
-        setHasTrustedContact(res.data.length > 0);
+        const first = res.data[0];
+        setTrustedContactPhone(first?.phone ?? null);
       } catch {
-        setHasTrustedContact(false);
+        setTrustedContactPhone(null);
       }
     }
     checkContacts();
@@ -74,7 +75,7 @@ export function CrisisScreen() {
     <View style={[styles.screen, {backgroundColor: colors.background}]}>
       <ScrollView contentContainerStyle={styles.content}>
         <CrisisMessage
-          hasTrustedContact={hasTrustedContact}
+          trustedContactPhone={trustedContactPhone}
           onMessageSupport={handleMessageSupport}
         />
       </ScrollView>

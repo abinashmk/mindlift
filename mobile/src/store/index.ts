@@ -3,12 +3,14 @@ import {TypedUseSelectorHook, useDispatch, useSelector} from 'react-redux';
 import authReducer from './authSlice';
 import metricsReducer from './metricsSlice';
 import chatReducer from './chatSlice';
+import consentsReducer from './consentsSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     metrics: metricsReducer,
     chat: chatReducer,
+    consents: consentsReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

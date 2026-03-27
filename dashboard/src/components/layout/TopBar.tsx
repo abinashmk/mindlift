@@ -43,7 +43,7 @@ export function TopBar({ title }: TopBarProps) {
                 aria-hidden="true"
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700"
               >
-                {currentUser.email.charAt(0).toUpperCase()}
+                {currentUser.email ? currentUser.email.charAt(0).toUpperCase() : '?'}
               </div>
               <span className="hidden text-sm text-neutral-600 sm:block">
                 {currentUser.email}

@@ -1,10 +1,15 @@
 import {Platform, PermissionsAndroid, Permission} from 'react-native';
+import {
+  check,
+  request,
+  PERMISSIONS,
+  RESULTS,
+  openSettings,
+} from 'react-native-permissions';
 import {PermissionResults} from '@/types';
 import {requestHealthPermissions} from './healthService';
 
-// On iOS these would use react-native-permissions in a real app.
-// For this implementation we provide the full service interface
-// and use PermissionsAndroid where available.
+// ─── Android helpers (PermissionsAndroid) ────────────────────────────────────
 
 async function requestAndroid(permission: Permission): Promise<boolean> {
   try {
@@ -23,20 +28,40 @@ async function checkAndroid(permission: Permission): Promise<boolean> {
   }
 }
 
+// ─── iOS helpers (react-native-permissions) ──────────────────────────────────
+
+async function requestIOS(permission: string): Promise<boolean> {
+  try {
+    const result = await request(permission as any);
+    return result === RESULTS.GRANTED || result === RESULTS.LIMITED;
+  } catch {
+    return false;
+  }
+}
+
+async function checkIOS(permission: string): Promise<boolean> {
+  try {
+    const result = await check(permission as any);
+    return result === RESULTS.GRANTED || result === RESULTS.LIMITED;
+  } catch {
+    return false;
+  }
+}
+
+// ─── Public service ──────────────────────────────────────────────────────────
+
 export const permissionService = {
   async requestMotion(): Promise<boolean> {
     if (Platform.OS === 'android') {
-      // Activity recognition requires API 29+
       if (Platform.Version >= 29) {
         return requestAndroid(
           PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION,
         );
       }
-      return true; // Granted by default on older Android
+      return true; // Granted by default on Android < 10
     }
-    // iOS: CoreMotion — would use react-native-permissions in production
-    // Returning true as placeholder (native module required)
-    return true;
+    // iOS: CoreMotion
+    return requestIOS(PERMISSIONS.IOS.MOTION);
   },
 
   async requestNotifications(): Promise<boolean> {
@@ -45,13 +70,18 @@ export const permissionService = {
         PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
       );
     }
-    // iOS handled by notificationService
+    // iOS: handled by notificationService (uses requestPermissions from
+    // @react-native-community/push-notification-ios or Expo Notifications).
+    // react-native-permissions mirrors the same underlying call here.
+    if (Platform.OS === 'ios') {
+      return requestIOS(PERMISSIONS.IOS.NOTIFICATIONS);
+    }
     return true;
   },
 
   async requestHealth(): Promise<boolean> {
-    // Delegate to the platform-specific health service (HealthKit on iOS,
-    // Health Connect on Android). The platform file is resolved by Metro.
+    // Delegated to the platform-specific health service
+    // (HealthKit on iOS, Health Connect on Android).
     return requestHealthPermissions();
   },
 
@@ -61,30 +91,39 @@ export const permissionService = {
         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
       );
     }
-    // iOS: Core Location — native module required
-    return false;
+    // iOS: Core Location — when-in-use is sufficient for category detection.
+    return requestIOS(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
   },
 
   async requestMicrophone(): Promise<boolean> {
     if (Platform.OS === 'android') {
-      return requestAndroid(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      );
+      return requestAndroid(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
     }
-    // iOS: Microphone — native module required
-    return false;
+    // iOS: Microphone for ambient noise level sampling.
+    return requestIOS(PERMISSIONS.IOS.MICROPHONE);
   },
 
   async checkMotion(): Promise<boolean> {
-    if (Platform.OS === 'android' && Platform.Version >= 29) {
-      return checkAndroid(PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION);
+    if (Platform.OS === 'android') {
+      if (Platform.Version >= 29) {
+        return checkAndroid(PermissionsAndroid.PERMISSIONS.ACTIVITY_RECOGNITION);
+      }
+      return true;
     }
-    return true;
+    return checkIOS(PERMISSIONS.IOS.MOTION);
+  },
+
+  /**
+   * Open the app's system settings page so the user can manually grant a
+   * previously denied permission.
+   */
+  openAppSettings(): void {
+    openSettings().catch(() => {});
   },
 
   /**
    * Request all required permissions and optionally health/location/microphone
-   * based on consent choices.
+   * based on consent choices made during onboarding.
    */
   async requestAll(options: {
     healthAccepted: boolean;

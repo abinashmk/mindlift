@@ -12,6 +12,8 @@ import {AxiosError} from 'axios';
 
 import {ConsentPayload, OnboardingStackParamList} from '@/types';
 import {consentsApi} from '@/api/escalations';
+import {useAppDispatch} from '@/store';
+import {setConsents} from '@/store/consentsSlice';
 import {Button} from '@/components/ui/Button';
 import {ConsentToggle} from '@/components/ConsentToggle';
 import {
@@ -26,6 +28,7 @@ type NavProp = NativeStackNavigationProp<OnboardingStackParamList>;
 
 export function ConsentScreen() {
   const navigation = useNavigation<NavProp>();
+  const dispatch = useAppDispatch();
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
 
@@ -64,7 +67,30 @@ export function ConsentScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      await consentsApi.submitConsents(consentPayload);
+      const entries: [string, boolean][] = [
+        ['terms_accepted', termsAccepted],
+        ['privacy_accepted', privacyAccepted],
+        ['data_collection_accepted', dataCollectionAccepted],
+        ['chat_logging_accepted', chatLoggingAccepted],
+        ['health_data_accepted', healthDataAccepted],
+        ['location_category_accepted', locationAccepted],
+        ['noise_level_accepted', noiseLevelAccepted],
+      ];
+      await Promise.all(
+        entries.map(([key, value]) =>
+          consentsApi.submitConsents({
+            consent_key: key,
+            consent_value: value,
+            policy_version: '1.0',
+          }),
+        ),
+      );
+      dispatch(setConsents({
+        health_data_accepted: healthDataAccepted,
+        location_category_accepted: locationAccepted,
+        noise_level_accepted: noiseLevelAccepted,
+        chat_logging_accepted: chatLoggingAccepted,
+      }));
       navigation.navigate('PermissionSetup', {consentPayload});
     } catch (err) {
       const axiosErr = err as AxiosError;

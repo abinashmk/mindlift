@@ -15,7 +15,7 @@ export async function fetchAuditLogs(
   params: FetchAuditLogsParams = {},
 ): Promise<PaginatedResponse<AuditLog>> {
   const response = await apiClient.get<PaginatedResponse<AuditLog>>(
-    '/api/v1/audit/logs',
+    '/v1/support/audit-logs',
     { params },
   )
   return response.data

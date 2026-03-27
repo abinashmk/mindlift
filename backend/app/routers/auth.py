@@ -2,11 +2,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log
+from app.core.limiter import limiter
 from app.core.security import (
     create_access_token,
     create_mfa_token,
@@ -71,13 +72,16 @@ async def register(
         action_key="user.register",
         entity_type="user",
         entity_id=user.id,
-        metadata={"email": user.email},
+        extra={"email": user.email},
     )
     return {"id": str(user.id), "message": "Registration successful. Please verify your email."}
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
+    response: Response,
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -113,7 +117,10 @@ async def login(
 
 
 @router.post("/mfa/verify", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def mfa_verify(
+    request: Request,
+    response: Response,
     payload: MFAVerifyRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -211,7 +218,10 @@ async def verify_email(
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 async def forgot_password(
+    request: Request,
+    response: Response,
     payload: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):
@@ -229,18 +239,23 @@ async def forgot_password(
         key = f"pwd_reset:{reset_token}"
         await redis.set(key, str(user.id), ex=1800)  # 30-minute TTL
 
-        # Stub: log to console instead of sending real email.
-        logger.info(
-            "[forgot-password] Reset link for %s: /reset-password?token=%s",
-            payload.email,
-            reset_token,
-        )
+        from app.config import settings as cfg
+        from app.services.email import send_password_reset_email
+
+        reset_url = f"{cfg.app_base_url}/reset-password?token={reset_token}"
+        try:
+            send_password_reset_email(user.email, reset_url)
+        except Exception as email_exc:
+            logger.warning("[forgot-password] email send failed for %s: %s", payload.email, email_exc)
 
     return {"message": "If that email exists, a reset link has been sent."}
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit("10/minute")
 async def reset_password(
+    request: Request,
+    response: Response,
     payload: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db),
 ):

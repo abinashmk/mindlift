@@ -193,14 +193,52 @@ def run_daily_risk_assessments(self):
         raise self.retry(exc=exc, countdown=60 * 5)
 
 
-@celery_app.task(name="app.worker.tasks.send_push_notification")
-def send_push_notification(user_id: str, title: str, body: str, data: dict | None = None):
+@celery_app.task(name="app.worker.tasks.send_push_notification", bind=True, max_retries=3)
+def send_push_notification(
+    self, user_id: str, title: str, body: str, data: dict | None = None
+):
     """
-    Send a push notification to all devices registered for a user.
-    Wire up to APNs / FCM in production.
+    Send a push notification to all active devices registered for a user.
+    Dispatches to APNs (iOS) or FCM (Android) based on device platform.
+    Retries up to 3 times on transient failures.
     """
-    print(f"[push] user={user_id} title={title!r} body={body!r} data={data}")
-    return {"status": "stub_sent"}
+    from app.services.push import send_apns, send_fcm
+
+    async def _run() -> dict:
+        from sqlalchemy import select
+
+        from app.database import AsyncSessionLocal
+        from app.models.device import Device
+
+        uid = uuid.UUID(user_id)
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(Device).where(
+                    Device.user_id == uid,
+                    Device.notifications_enabled.is_(True),
+                    Device.push_token.isnot(None),
+                )
+            )
+            devices = result.scalars().all()
+
+        sent = 0
+        skipped = 0
+        for device in devices:
+            try:
+                if device.platform == "ios":
+                    ok = send_apns(device.push_token, title, body, data)
+                else:
+                    ok = send_fcm(device.push_token, title, body, data)
+                if ok:
+                    sent += 1
+                else:
+                    skipped += 1
+            except Exception as exc:  # transient — let Celery retry the whole task
+                raise self.retry(exc=exc, countdown=30)
+
+        return {"status": "sent", "sent": sent, "skipped": skipped}
+
+    return _run_async(_run())
 
 
 @celery_app.task(name="app.worker.tasks.compute_risk_assessment", bind=True, max_retries=3)
@@ -373,50 +411,237 @@ def process_account_deletion(self, user_id: str):
 @celery_app.task(name="app.worker.tasks.generate_export_zip", bind=True, max_retries=3)
 def generate_export_zip(self, user_id: str):
     """
-    Generate a GDPR-compliant data export for the user and log the result.
-    In production, upload the ZIP to S3/presigned URL and notify the user.
+    Build a GDPR-compliant ZIP export for the user, upload it to S3, generate
+    a 15-minute presigned download URL, then notify the user via email and push.
+
+    ZIP contents (per spec §34):
+      profile.json
+      consents.json
+      daily_metrics.csv
+      risk_assessments.csv
+      intervention_events.csv
+      chat_messages.csv  (only when chat_logging_accepted is true)
+      escalations.csv
     """
+    import csv
+    import io
+    import json
+    import zipfile
 
-    async def _run():
-        import json
-
+    async def _fetch_data() -> dict:
         from sqlalchemy import select
 
         from app.database import AsyncSessionLocal
-        from app.models.chat import ChatSession
+        from app.models.chat import ChatMessage, ChatSession
+        from app.models.escalation import Escalation
         from app.models.intervention import InterventionEvent
         from app.models.metrics import DailyMetric
         from app.models.risk import RiskAssessment
         from app.models.user import User, UserConsent
 
         uid = uuid.UUID(user_id)
-
         async with AsyncSessionLocal() as db:
-            user_result = await db.execute(select(User).where(User.id == uid))
-            user = user_result.scalar_one_or_none()
+            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
             if not user:
-                return {"status": "skipped", "reason": "user_not_found"}
+                return {}
 
-            metrics_result = await db.execute(
-                select(DailyMetric).where(DailyMetric.user_id == uid)
-            )
-            consents_result = await db.execute(
-                select(UserConsent).where(UserConsent.user_id == uid)
+            consents = (
+                await db.execute(select(UserConsent).where(UserConsent.user_id == uid))
+            ).scalars().all()
+
+            chat_logging = any(
+                c.consent_key == "chat_logging_accepted" and c.consent_value
+                for c in consents
             )
 
-            export_data = {
-                "user_id": user_id,
+            metrics = (
+                await db.execute(
+                    select(DailyMetric)
+                    .where(DailyMetric.user_id == uid)
+                    .order_by(DailyMetric.metric_date)
+                )
+            ).scalars().all()
+
+            risks = (
+                await db.execute(
+                    select(RiskAssessment)
+                    .where(RiskAssessment.user_id == uid)
+                    .order_by(RiskAssessment.assessment_time)
+                )
+            ).scalars().all()
+
+            events = (
+                await db.execute(
+                    select(InterventionEvent)
+                    .where(InterventionEvent.user_id == uid)
+                    .order_by(InterventionEvent.triggered_at)
+                )
+            ).scalars().all()
+
+            escalations = (
+                await db.execute(
+                    select(Escalation)
+                    .where(Escalation.user_id == uid)
+                    .order_by(Escalation.created_at)
+                )
+            ).scalars().all()
+
+            chat_messages: list = []
+            if chat_logging:
+                sessions = (
+                    await db.execute(
+                        select(ChatSession).where(ChatSession.user_id == uid)
+                    )
+                ).scalars().all()
+                session_ids = [s.id for s in sessions]
+                if session_ids:
+                    chat_messages = (
+                        await db.execute(
+                            select(ChatMessage)
+                            .where(ChatMessage.session_id.in_(session_ids))
+                            .order_by(ChatMessage.created_at)
+                        )
+                    ).scalars().all()
+
+        return {
+            "user": user,
+            "consents": consents,
+            "metrics": metrics,
+            "risks": risks,
+            "events": events,
+            "escalations": escalations,
+            "chat_messages": chat_messages,
+            "chat_logging": chat_logging,
+        }
+
+    def _build_zip(data: dict) -> bytes:
+        user = data["user"]
+        exported_at = datetime.now(timezone.utc).isoformat()
+        buf = io.BytesIO()
+
+        with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            # profile.json
+            profile = {
+                "user_id": str(user.id),
                 "email": user.email,
-                "metrics_count": len(metrics_result.scalars().all()),
-                "consents_count": len(consents_result.scalars().all()),
-                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "first_name": user.first_name,
+                "timezone": user.timezone,
+                "state": user.state,
+                "created_at": user.created_at.isoformat(),
+                "exported_at": exported_at,
             }
+            zf.writestr("profile.json", json.dumps(profile, indent=2))
 
-        # Stub: log export summary; wire to real storage in production.
-        print(f"[export] user={user_id} export={json.dumps(export_data)}")
-        return {"status": "done", "user_id": user_id}
+            # consents.json
+            consents_out = [
+                {
+                    "consent_key": c.consent_key,
+                    "consent_value": c.consent_value,
+                    "policy_version": c.policy_version,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in data["consents"]
+            ]
+            zf.writestr("consents.json", json.dumps(consents_out, indent=2))
+
+            # daily_metrics.csv
+            metrics_fields = [
+                "metric_date", "steps", "resting_heart_rate_bpm", "average_heart_rate_bpm",
+                "hrv_ms", "sleep_hours", "sleep_source", "screen_time_minutes",
+                "location_home_ratio", "location_transitions", "noise_level_db_avg",
+                "mood_score", "communication_count", "created_at", "updated_at",
+            ]
+            metrics_buf = io.StringIO()
+            w = csv.DictWriter(metrics_buf, fieldnames=metrics_fields)
+            w.writeheader()
+            for m in data["metrics"]:
+                w.writerow({f: getattr(m, f) for f in metrics_fields})
+            zf.writestr("daily_metrics.csv", metrics_buf.getvalue())
+
+            # risk_assessments.csv
+            risk_fields = [
+                "assessment_time", "assessment_scope", "risk_score", "risk_level",
+                "feature_sleep_score", "feature_activity_score", "feature_heart_score",
+                "feature_social_score", "baseline_complete", "created_at",
+            ]
+            risk_buf = io.StringIO()
+            w = csv.DictWriter(risk_buf, fieldnames=risk_fields)
+            w.writeheader()
+            for r in data["risks"]:
+                w.writerow({f: getattr(r, f) for f in risk_fields})
+            zf.writestr("risk_assessments.csv", risk_buf.getvalue())
+
+            # intervention_events.csv
+            event_fields = [
+                "id", "intervention_id", "triggered_at", "risk_level",
+                "status", "completed", "helpful_rating", "created_at",
+            ]
+            event_buf = io.StringIO()
+            w = csv.DictWriter(event_buf, fieldnames=event_fields)
+            w.writeheader()
+            for e in data["events"]:
+                w.writerow({f: getattr(e, f) for f in event_fields})
+            zf.writestr("intervention_events.csv", event_buf.getvalue())
+
+            # escalations.csv
+            esc_fields = [
+                "id", "source", "status", "risk_level", "created_at",
+                "updated_at", "resolved_at",
+            ]
+            esc_buf = io.StringIO()
+            w = csv.DictWriter(esc_buf, fieldnames=esc_fields)
+            w.writeheader()
+            for e in data["escalations"]:
+                w.writerow({f: getattr(e, f) for f in esc_fields})
+            zf.writestr("escalations.csv", esc_buf.getvalue())
+
+            # chat_messages.csv — only when chat logging consent was given
+            if data["chat_logging"]:
+                msg_fields = [
+                    "id", "session_id", "sender_type", "message_text",
+                    "message_length", "created_at",
+                ]
+                msg_buf = io.StringIO()
+                w = csv.DictWriter(msg_buf, fieldnames=msg_fields)
+                w.writeheader()
+                for m in data["chat_messages"]:
+                    w.writerow({f: getattr(m, f) for f in msg_fields})
+                zf.writestr("chat_messages.csv", msg_buf.getvalue())
+
+        return buf.getvalue()
 
     try:
-        return _run_async(_run())
+        data = _run_async(_fetch_data())
+        if not data:
+            return {"status": "skipped", "reason": "user_not_found"}
+
+        zip_bytes = _build_zip(data)
+
+        # Upload to S3
+        from app.services.s3 import presigned_download_url, upload_bytes
+
+        s3_key = f"exports/{user_id}/{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
+        upload_bytes(s3_key, zip_bytes, content_type="application/zip")
+
+        # 15-minute presigned URL (spec §34)
+        download_url = presigned_download_url(s3_key, expires_in=900)
+
+        # Notify user via email and push
+        user = data["user"]
+        try:
+            from app.services.email import send_export_ready_email
+            send_export_ready_email(user.email, download_url)
+        except Exception as email_exc:
+            print(f"[export] email send failed user={user_id}: {email_exc}")
+
+        send_push_notification.delay(
+            user_id,
+            title="MindLift reminder",
+            body="A short action is ready",
+            data={"type": "export_ready"},
+        )
+
+        return {"status": "done", "user_id": user_id, "s3_key": s3_key, "download_url": download_url}
+
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)

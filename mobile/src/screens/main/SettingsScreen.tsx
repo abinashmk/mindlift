@@ -60,8 +60,8 @@ export function SettingsScreen() {
   async function handleExport() {
     setIsExporting(true);
     try {
-      await accountApi.requestExport();
-      navigation.navigate('ExportRequested');
+      const res = await accountApi.requestExport();
+      navigation.navigate('ExportRequested', {taskId: res.data.task_id});
     } catch {
       Alert.alert('Error', 'Failed to request data export. Please try again.');
     } finally {
@@ -161,9 +161,7 @@ export function SettingsScreen() {
         <SettingsActionRow
           label="View & update consents"
           colors={colors}
-          onPress={() => {
-            // Would navigate to consent update screen
-          }}
+          onPress={() => navigation.navigate('ConsentUpdate')}
         />
         <SettingsActionRow
           label="Manage permissions"

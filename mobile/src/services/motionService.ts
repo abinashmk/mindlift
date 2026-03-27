@@ -70,11 +70,6 @@ export async function getDailyStepCount(date: Date): Promise<number | null> {
 
   const nativeModule = getNativeModule();
   if (!nativeModule) {
-    // Native module not linked yet — see setup notes in this file's header
-    console.warn(
-      '[motionService] MindLiftPedometer native module not found. ' +
-        'Follow the native setup instructions in motionService.ts.',
-    );
     return null;
   }
 

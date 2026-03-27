@@ -18,13 +18,13 @@ export const escalationsApi = {
 };
 
 export const consentsApi = {
-  submitConsents: (payload: ConsentPayload) =>
-    apiClient.post('/consents', payload),
+  submitConsents: (payload: {consent_key: string; consent_value: boolean; policy_version: string}) =>
+    apiClient.post('/users/me/consents', payload),
 
-  getConsents: () => apiClient.get<ConsentPayload>('/consents'),
+  getConsents: () => apiClient.get('/users/me/consents'),
 
-  updateConsents: (payload: Partial<ConsentPayload>) =>
-    apiClient.put('/consents', payload),
+  updateConsents: (payload: {consent_key: string; consent_value: boolean; policy_version: string}) =>
+    apiClient.put('/users/me/consents', payload),
 };
 
 export const devicesApi = {
@@ -33,7 +33,14 @@ export const devicesApi = {
 };
 
 export const accountApi = {
-  requestExport: () => apiClient.post('/account/export'),
+  requestExport: () =>
+    apiClient.post<{task_id: string}>('/account/export'),
+
+  getExportStatus: (taskId: string) =>
+    apiClient.get<{status: 'pending' | 'ready' | 'failed'; download_url?: string}>(
+      `/account/export/status`,
+      {params: {task_id: taskId}},
+    ),
 
   deleteAccount: () => apiClient.delete('/account'),
 };

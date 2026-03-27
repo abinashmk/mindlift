@@ -19,12 +19,12 @@ import {
 } from '@/utils/constants';
 
 interface CrisisMessageProps {
-  hasTrustedContact: boolean;
+  trustedContactPhone: string | null;
   onMessageSupport: () => void;
 }
 
 export function CrisisMessage({
-  hasTrustedContact,
+  trustedContactPhone,
   onMessageSupport,
 }: CrisisMessageProps) {
   const isDark = useColorScheme() === 'dark';
@@ -39,9 +39,8 @@ export function CrisisMessage({
   }
 
   function contactTrustedPerson() {
-    if (!hasTrustedContact) return;
-    // In a real app, this would look up and call/text the trusted contact
-    Linking.openURL('tel:');
+    if (!trustedContactPhone) return;
+    Linking.openURL(`tel:${trustedContactPhone}`);
   }
 
   return (
@@ -68,7 +67,7 @@ export function CrisisMessage({
           label="Contact trusted person"
           onPress={contactTrustedPerson}
           variant="secondary"
-          disabled={!hasTrustedContact}
+          disabled={!trustedContactPhone}
           colors={colors}
         />
         <CrisisButton
