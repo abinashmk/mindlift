@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  View,
-  StyleSheet,
-  ViewStyle,
-  useColorScheme,
-} from 'react-native';
+import {View, StyleSheet, ViewStyle, useColorScheme} from 'react-native';
 import {
   CARD_PADDING,
   CARD_RADIUS,
@@ -28,7 +23,8 @@ export function Card({children, style, padding = CARD_PADDING}: CardProps) {
         styles.card,
         {
           backgroundColor: colors.surface,
-          shadowColor: isDark ? '#000' : '#000',
+          borderColor: colors.border,
+          shadowColor: isDark ? '#000' : '#3d2d6e',
           padding,
         },
         style,
@@ -41,9 +37,10 @@ export function Card({children, style, padding = CARD_PADDING}: CardProps) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: CARD_RADIUS,
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
     elevation: 2,
   },
 });

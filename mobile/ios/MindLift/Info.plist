@@ -26,7 +26,6 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
@@ -40,6 +39,10 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>MindLift reads your steps, heart rate, HRV, and sleep data from Apple Health to build a personalised wellness baseline. No health data is shared with third parties.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>MindLift does not write data to Apple Health.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>MindLift uses your approximate location to understand whether you are spending time at home, work, or out — no exact coordinates are stored.</string>
 	<key>NSMotionUsageDescription</key>
@@ -58,7 +61,22 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Ionicons.ttf</string>
+		<string>MaterialIcons.ttf</string>
+		<string>FontAwesome.ttf</string>
+	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.641946583058-8pvimns5iu3ka870322liu8revmttltr</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

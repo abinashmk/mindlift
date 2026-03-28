@@ -17,8 +17,13 @@ import {useAppDispatch, useAppSelector} from '@/store';
 import {setHomeData, setLoadingHome, setMoodScore} from '@/store/metricsSlice';
 import {useMetricSync} from '@/hooks/useMetricSync';
 import {RiskCard} from '@/components/RiskCard';
+import {DailyGoalsCard} from '@/components/DailyGoalsCard';
+import {PatternInsightCard} from '@/components/PatternInsightCard';
+import {PatternInsight} from '@/api/metrics';
 import {MetricCard} from '@/components/MetricCard';
 import {MoodPicker} from '@/components/MoodPicker';
+import {StressSourcePicker} from '@/components/StressSourcePicker';
+import {StressSource} from '@/api/metrics';
 import {Card} from '@/components/ui/Card';
 import {Button} from '@/components/ui/Button';
 import {Badge} from '@/components/ui/Badge';
@@ -50,14 +55,25 @@ export function HomeScreen() {
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
 
   const {firstName} = useAppSelector(state => state.auth);
-  const {todayMetrics, riskAssessment, interventions, riskHistory, isLoadingHome, hasStaleQueueWarning} =
+  const {todayMetrics, riskAssessment, interventions, riskHistory, dailyGoals, isLoadingHome, hasStaleQueueWarning} =
     useAppSelector(state => state.metrics);
 
   const [moodPending, setMoodPending] = useState<number | null>(null);
   const [moodSaving, setMoodSaving] = useState(false);
+  const [stressSource, setStressSource] = useState<StressSource | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [patternInsight, setPatternInsight] = useState<PatternInsight | null>(null);
 
   useMetricSync();
+
+  const loadPatternInsight = useCallback(async () => {
+    try {
+      const res = await metricsApi.getPatternInsight();
+      setPatternInsight(res.data.has_pattern ? res.data : null);
+    } catch {
+      // Non-critical — leave card hidden
+    }
+  }, []);
 
   const loadHomeData = useCallback(async () => {
     dispatch(setLoadingHome(true));
@@ -69,6 +85,7 @@ export function HomeScreen() {
           todayMetrics: res.data.today_metrics,
           suggestedIntervention: res.data.suggested_intervention,
           recentRiskHistory: res.data.recent_risk_history,
+          dailyGoals: res.data.daily_goals ?? [],
         }),
       );
     } catch {
@@ -79,13 +96,23 @@ export function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       loadHomeData();
-    }, [loadHomeData]),
+      loadPatternInsight();
+    }, [loadHomeData, loadPatternInsight]),
   );
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadHomeData();
+    await Promise.all([loadHomeData(), loadPatternInsight()]);
     setRefreshing(false);
+  }
+
+  async function handleStressSourceSave(source: StressSource) {
+    setStressSource(source);
+    try {
+      await metricsApi.logStressSource(source, todayISODate());
+    } catch {
+      // Silent — stored optimistically
+    }
   }
 
   async function handleMoodSave(score: number) {
@@ -105,6 +132,8 @@ export function HomeScreen() {
   const suggestedIntervention = interventions[0] ?? null;
   const recentHistory: RiskHistoryItem[] = riskHistory.slice(0, 3);
   const todayMood = moodPending ?? todayMetrics?.mood_score ?? null;
+  const todayStressSource =
+    stressSource ?? (todayMetrics?.stress_source as StressSource | null) ?? null;
 
   return (
     <ScrollView
@@ -156,9 +185,25 @@ export function HomeScreen() {
         lastUpdated={riskAssessment?.assessment_time}
       />
 
+      {/* 3. Daily Goals */}
+      {dailyGoals.length > 0 && (
+        <>
+          <View style={{height: CARD_VERTICAL_GAP}} />
+          <DailyGoalsCard goals={dailyGoals} />
+        </>
+      )}
+
+      {/* 4. Pattern insight — shown only when active drift is detected */}
+      {patternInsight && (
+        <>
+          <View style={{height: CARD_VERTICAL_GAP}} />
+          <PatternInsightCard insight={patternInsight} />
+        </>
+      )}
+
       <View style={{height: CARD_VERTICAL_GAP}} />
 
-      {/* 3. Sleep Card */}
+      {/* 5. Sleep Card */}
       <MetricCard
         title="Sleep"
         value={formatSleepHours(todayMetrics?.sleep_hours ?? null)}
@@ -214,6 +259,14 @@ export function HomeScreen() {
             Saving…
           </Text>
         )}
+        <Text
+          style={[styles.stressLabel, {color: colors.textSecondary}]}>
+          What's weighing on you?
+        </Text>
+        <StressSourcePicker
+          value={todayStressSource}
+          onChange={handleStressSourceSave}
+        />
       </Card>
 
       <View style={{height: CARD_VERTICAL_GAP}} />
@@ -279,7 +332,7 @@ export function HomeScreen() {
                   ]}
                 />
                 <Text style={[styles.chipText, {color: colors.textPrimary}]}>
-                  {item.date.slice(5)} {/* MM-DD */}
+                  {item.date?.slice(5) ?? ''} {/* MM-DD */}
                 </Text>
               </View>
             ))}
@@ -359,6 +412,14 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     marginTop: SPACING.xs,
     textAlign: 'center',
+  },
+  stressLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   interventionName: {
     fontSize: FONT_SIZE.md,

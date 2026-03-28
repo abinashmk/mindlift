@@ -6,6 +6,18 @@ export interface SendMessagePayload {
   message_text: string;
 }
 
+export interface SessionSummary {
+  session_id: string;
+  state: string;
+  crisis_flag: boolean;
+}
+
+export interface SendMessageResponse {
+  // null when crisis is detected — no LLM reply is generated (spec §24.4)
+  assistant_message: ChatMessageResponse | null;
+  session: SessionSummary;
+}
+
 export const chatApi = {
   startSession: () => apiClient.post<ChatSession>('/chat/sessions', {}),
 
@@ -16,7 +28,7 @@ export const chatApi = {
     apiClient.get<ChatMessage[]>(`/chat/sessions/${sessionId}/messages`),
 
   sendMessage: (payload: SendMessagePayload) =>
-    apiClient.post<ChatMessageResponse>(
+    apiClient.post<SendMessageResponse>(
       `/chat/sessions/${payload.session_id}/messages`,
       {message_text: payload.message_text},
     ),

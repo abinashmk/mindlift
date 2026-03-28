@@ -2,6 +2,7 @@ import {useEffect, useRef, useCallback} from 'react';
 import {AppState, AppStateStatus} from 'react-native';
 import {useAppDispatch, useAppSelector} from '@/store';
 import {setStaleQueueWarning} from '@/store/metricsSlice';
+import {setTodayMeetingHours} from '@/store/calendarSlice';
 import {metricsApi} from '@/api/metrics';
 import {localQueue} from '@/services/localQueue';
 import {readDailyHealthData, isHealthDataAvailable} from '@/services/healthService';
@@ -10,6 +11,7 @@ import {getTodayScreenTimeMinutes} from '@/services/screenTimeService';
 import {sampleLocationAndAggregate} from '@/services/locationService';
 import {getAmbientNoiseLevel} from '@/services/ambientNoiseService';
 import {inferSleepHours} from '@/services/inferredSleepService';
+import {fetchTodayMeetingHours} from '@/services/calendarService';
 import {getCollectionIntervalMs, getRetryIntervalMs} from '@/services/pollingService';
 import {DailyMetrics} from '@/types';
 import {todayISODate} from '@/utils/formatters';
@@ -33,6 +35,7 @@ import {todayISODate} from '@/utils/formatters';
 async function collectDailyMetrics(
   moodScore: number | null,
   communicationCount: number | null,
+  meetingHours: number | null,
   consents: {health: boolean; location: boolean; noise: boolean},
 ): Promise<DailyMetrics> {
   const today = new Date();
@@ -131,9 +134,11 @@ async function collectDailyMetrics(
     location_home_ratio: locationHomeRatio,
     location_transitions: locationTransitions,
     noise_level_db_avg: noiseLevelDb,
-    // Fields not collected by sensors — provided from Redux (manual entry)
+    // Fields not collected by sensors — provided from Redux (manual entry or integrations)
     mood_score: moodScore,
+    stress_source: null, // set by user in HomeScreen mood card, merged via upsert
     communication_count: communicationCount,
+    meeting_hours: meetingHours,
   };
 
   return metrics;
@@ -152,6 +157,11 @@ export function useMetricSync() {
     state => state.metrics.todayMetrics?.communication_count ?? null,
   );
 
+  // Calendar integration — meeting hours from Google Calendar
+  const calendarConnected = useAppSelector(state => state.calendar.connected);
+  const storedMeetingHours = useAppSelector(state => state.calendar.todayMeetingHours);
+  const calendarLastSynced = useAppSelector(state => state.calendar.lastSyncedDate);
+
   // Consent flags — collection stops immediately when a consent is revoked (spec §10.4).
   const consentHealth = useAppSelector(state => state.consents.health_data_accepted);
   const consentLocation = useAppSelector(state => state.consents.location_category_accepted);
@@ -167,9 +177,25 @@ export function useMetricSync() {
       );
     }
 
+    // ── Fetch today's meeting hours from Google Calendar if connected ─────────
+    let meetingHours: number | null = storedMeetingHours;
+    if (calendarConnected) {
+      const today = todayISODate();
+      if (calendarLastSynced !== today) {
+        try {
+          const hours = await fetchTodayMeetingHours();
+          dispatch(setTodayMeetingHours({hours, date: today}));
+          meetingHours = hours;
+        } catch (err) {
+          console.warn('[MetricSync] Calendar fetch failed:', err);
+          // Fall back to stored value
+        }
+      }
+    }
+
     // ── Collect and enqueue today's metrics ──────────────────────────────────
     try {
-      const todayMetrics = await collectDailyMetrics(moodScore, communicationCount, {
+      const todayMetrics = await collectDailyMetrics(moodScore, communicationCount, meetingHours, {
         health: consentHealth,
         location: consentLocation,
         noise: consentNoise,
@@ -192,7 +218,7 @@ export function useMetricSync() {
         console.warn(`[MetricSync] Failed to upload metrics for ${item.date}:`, err);
       }
     }
-  }, [dispatch, moodScore, communicationCount]);
+  }, [dispatch, moodScore, communicationCount, calendarConnected, storedMeetingHours, calendarLastSynced, consentHealth, consentLocation, consentNoise]);
 
   // Check for stale entries on mount
   useEffect(() => {

@@ -44,6 +44,8 @@ class DailyMetric(Base):
     location_transitions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     noise_level_db_avg: Mapped[float | None] = mapped_column(Double, nullable=True)
     mood_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stress_source: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    meeting_hours: Mapped[float | None] = mapped_column(Double, nullable=True)
     communication_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow

@@ -34,6 +34,8 @@ export interface DailyMetrics {
   location_transitions: number | null;
   noise_level_db_avg: number | null;
   mood_score: number | null;
+  stress_source: string | null;
+  meeting_hours: number | null;
   communication_count: number | null;
 }
 
@@ -177,11 +179,19 @@ export interface UserProfile {
   created_at: string;
 }
 
+export interface DailyGoal {
+  key: string;
+  label: string;
+  done: boolean;
+  detail: string;
+}
+
 export interface HomeData {
   risk_assessment: RiskAssessment | null;
   today_metrics: Partial<DailyMetrics> | null;
   suggested_intervention: InterventionEvent | null;
   recent_risk_history: RiskHistoryItem[];
+  daily_goals: DailyGoal[];
 }
 
 // ─── Offline Queue ────────────────────────────────────────────────────────────

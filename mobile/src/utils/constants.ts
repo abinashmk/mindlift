@@ -1,112 +1,131 @@
 import {RiskLevel} from '@/types';
 
 // ─── Risk Colors ──────────────────────────────────────────────────────────────
+// Muted, accessible palette — less clinical than pure red/green
 
 export const RISK_COLORS: Record<RiskLevel, string> = {
-  GREEN: '#22c55e',
-  YELLOW: '#facc15',
-  ORANGE: '#f97316',
-  RED: '#dc2626',
-  UNDEFINED: '#9ca3af',
+  GREEN:     '#2daa78',
+  YELLOW:    '#d4a53a',
+  ORANGE:    '#d47040',
+  RED:       '#c94545',
+  UNDEFINED: '#a09ab8',
 };
 
 // ─── Risk Explanations ────────────────────────────────────────────────────────
 
 export const RISK_EXPLANATIONS: Record<RiskLevel, string> = {
-  GREEN: "You're doing well. Keep up your routines.",
-  YELLOW: 'Some patterns are slightly off. A small action may help.',
-  ORANGE: 'Several patterns need attention. Consider the suggested actions.',
-  RED: 'Significant changes detected. Support has been notified.',
+  GREEN:
+    'Your sleep, activity, and mood are tracking well. Keep it up.',
+  YELLOW:
+    'Some patterns are shifting. A small recovery action may help.',
+  ORANGE:
+    'Your burnout indicators need attention. Check the suggested action below.',
+  RED:
+    'High burnout load detected. Support has been notified.',
   UNDEFINED:
-    'We are still learning your normal patterns. Risk insights will appear after enough data is collected.',
+    'Still building your baseline. Burnout load insights appear after a few days of tracking.',
+};
+
+// Human-readable labels for stress sources
+export const STRESS_SOURCE_LABELS: Record<string, string> = {
+  workload:      'Heavy workload',
+  deadlines:     'Deadlines / exams',
+  career:        'Career uncertainty',
+  finances:      'Financial pressure',
+  relationships: 'Relationships',
+  other:         'Something else',
 };
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs:   4,
+  sm:   8,
+  md:   14,
+  lg:   18,
+  xl:   22,
+  xxl:  28,
+  xxxl: 36,
 } as const;
 
 export const BORDER_RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
+  sm:   8,
+  md:   14,
+  lg:   20,
+  xl:   28,
   full: 9999,
 } as const;
 
 export const FONT_SIZE = {
-  xs: 11,
-  sm: 13,
-  md: 15,
-  lg: 17,
-  xl: 20,
-  xxl: 24,
-  xxxl: 28,
+  xs:   11,
+  sm:   13,
+  md:   15,
+  lg:   17,
+  xl:   21,
+  xxl:  26,
+  xxxl: 32,
 } as const;
 
-export const LINE_HEIGHT_MULTIPLIER = 1.4;
+export const LINE_HEIGHT_MULTIPLIER = 1.5;
 
-export const MIN_TAPPABLE = 44;
-export const CTA_HEIGHT = 48;
-export const PAGE_HORIZONTAL_PADDING = 16;
-export const CARD_PADDING = 16;
-export const CARD_VERTICAL_GAP = 12;
-export const SECTION_GAP = 20;
-export const CARD_RADIUS = 16;
+export const MIN_TAPPABLE          = 44;
+export const CTA_HEIGHT            = 52;
+export const PAGE_HORIZONTAL_PADDING = 20;
+export const CARD_PADDING          = 20;
+export const CARD_VERTICAL_GAP     = 16;
+export const SECTION_GAP           = 28;
+export const CARD_RADIUS           = 20;
 
 // ─── Colors (light) ───────────────────────────────────────────────────────────
+// Warm lavender-white background, muted violet primary
 
 export const COLORS_LIGHT = {
-  background: '#f9fafb',
-  surface: '#ffffff',
-  surfaceSecondary: '#f3f4f6',
-  border: '#e5e7eb',
-  divider: '#f0f0f0',
-  textPrimary: '#111827',
-  textSecondary: '#6b7280',
-  textTertiary: '#9ca3af',
-  primary: '#3b82f6',
-  primaryDark: '#1d4ed8',
-  primaryLight: '#eff6ff',
-  danger: '#dc2626',
-  dangerLight: '#fef2f2',
-  warning: '#f97316',
-  success: '#22c55e',
-  successLight: '#f0fdf4',
-  overlay: 'rgba(0,0,0,0.5)',
+  background:       '#f7f5fc',
+  surface:          '#ffffff',
+  surfaceSecondary: '#f0ecf8',
+  border:           '#e6e1f0',
+  divider:          '#ede9f5',
+  textPrimary:      '#1a1535',
+  textSecondary:    '#6b6188',
+  textTertiary:     '#a29cbf',
+  primary:          '#7b5ea7',
+  primaryDark:      '#5a3d88',
+  primaryLight:     '#f0ebff',
+  danger:           '#c94545',
+  dangerLight:      '#fdf0f0',
+  warning:          '#c47830',
+  success:          '#2daa78',
+  successLight:     '#edf8f3',
+  overlay:          'rgba(26,21,53,0.5)',
 } as const;
 
+// ─── Colors (dark) ────────────────────────────────────────────────────────────
+// Deep indigo-black, soft violet accents
+
 export const COLORS_DARK = {
-  background: '#0f172a',
-  surface: '#1e293b',
-  surfaceSecondary: '#0f172a',
-  border: '#334155',
-  divider: '#1e293b',
-  textPrimary: '#f1f5f9',
-  textSecondary: '#94a3b8',
-  textTertiary: '#64748b',
-  primary: '#60a5fa',
-  primaryDark: '#93c5fd',
-  primaryLight: '#1e3a5f',
-  danger: '#f87171',
-  dangerLight: '#450a0a',
-  warning: '#fb923c',
-  success: '#4ade80',
-  successLight: '#052e16',
-  overlay: 'rgba(0,0,0,0.7)',
+  background:       '#100d1e',
+  surface:          '#1c1830',
+  surfaceSecondary: '#100d1e',
+  border:           '#2e2850',
+  divider:          '#1c1830',
+  textPrimary:      '#ede8ff',
+  textSecondary:    '#9e98bc',
+  textTertiary:     '#635d85',
+  primary:          '#a48cdd',
+  primaryDark:      '#c4b0ff',
+  primaryLight:     '#2a2050',
+  danger:           '#e07070',
+  dangerLight:      '#3a1515',
+  warning:          '#e09850',
+  success:          '#4dc898',
+  successLight:     '#0d2e22',
+  overlay:          'rgba(0,0,0,0.72)',
 } as const;
 
 // ─── Notification Constants ───────────────────────────────────────────────────
 
-export const QUIET_HOURS_START = 22; // 22:00
-export const QUIET_HOURS_END = 7; // 07:00
+export const QUIET_HOURS_START = 22;
+export const QUIET_HOURS_END   = 7;
 export const MAX_INTERVENTION_NOTIFICATIONS_PER_DAY = 3;
 export const MAX_MOOD_REMINDERS_PER_DAY = 1;
 
@@ -129,18 +148,18 @@ export const MOOD_EMOJIS: Record<number, string> = {
 // ─── Storage Keys ─────────────────────────────────────────────────────────────
 
 export const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'access_token',
-  REFRESH_TOKEN: 'refresh_token',
-  USER_ID: 'user_id',
-  USER_STATE: 'user_state',
-  FIRST_NAME: 'first_name',
-  METRIC_QUEUE: 'metric_queue',
-  QUIET_HOURS_START: 'quiet_hours_start',
-  QUIET_HOURS_END: 'quiet_hours_end',
-  DISCLOSURE_SHOWN: 'disclosure_shown',
-  INTERVENTION_NOTIF_COUNT: 'intervention_notif_count',
-  INTERVENTION_NOTIF_DATE: 'intervention_notif_date',
-  MOOD_REMINDER_DATE: 'mood_reminder_date',
+  ACCESS_TOKEN:              'access_token',
+  REFRESH_TOKEN:             'refresh_token',
+  USER_ID:                   'user_id',
+  USER_STATE:                'user_state',
+  FIRST_NAME:                'first_name',
+  METRIC_QUEUE:              'metric_queue',
+  QUIET_HOURS_START:         'quiet_hours_start',
+  QUIET_HOURS_END:           'quiet_hours_end',
+  DISCLOSURE_SHOWN:          'disclosure_shown',
+  INTERVENTION_NOTIF_COUNT:  'intervention_notif_count',
+  INTERVENTION_NOTIF_DATE:   'intervention_notif_date',
+  MOOD_REMINDER_DATE:        'mood_reminder_date',
 } as const;
 
 // ─── App Version ─────────────────────────────────────────────────────────────

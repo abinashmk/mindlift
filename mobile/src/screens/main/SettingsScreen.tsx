@@ -17,6 +17,8 @@ import {MainStackParamList} from '@/types';
 import {accountApi} from '@/api/escalations';
 import {useAppDispatch, useAppSelector} from '@/store';
 import {logout} from '@/store/authSlice';
+import {setCalendarConnected, setCalendarDisconnected} from '@/store/calendarSlice';
+import {signInToGoogle, signOutFromGoogle} from '@/services/calendarService';
 import {notificationService} from '@/services/notificationService';
 import {Button} from '@/components/ui/Button';
 import {
@@ -38,10 +40,54 @@ export function SettingsScreen() {
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
 
   const {email, firstName} = useAppSelector(state => state.auth);
+  const calendarConnected = useAppSelector(state => state.calendar.connected);
+  const calendarEmail = useAppSelector(state => state.calendar.userEmail);
 
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isCalendarLoading, setIsCalendarLoading] = useState(false);
+
+  async function handleCalendarConnect() {
+    setIsCalendarLoading(true);
+    try {
+      const googleEmail = await signInToGoogle();
+      dispatch(setCalendarConnected({userEmail: googleEmail}));
+    } catch (err: any) {
+      const detail = err?.message ?? JSON.stringify(err);
+      console.error('[CalendarConnect] error:', err);
+      const msg =
+        err?.code === '12501'
+          ? 'Sign-in was cancelled.'
+          : `Could not connect Google Calendar.\n\n${detail}`;
+      Alert.alert('Google Calendar', msg);
+    } finally {
+      setIsCalendarLoading(false);
+    }
+  }
+
+  async function handleCalendarDisconnect() {
+    Alert.alert(
+      'Disconnect Google Calendar',
+      'Meeting hours will no longer be tracked as a burnout signal.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCalendarLoading(true);
+            try {
+              await signOutFromGoogle();
+            } finally {
+              dispatch(setCalendarDisconnected());
+              setIsCalendarLoading(false);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   const quietHours = notificationService.getQuietHours();
   const [quietStart, setQuietStart] = useState(quietHours.start);
@@ -171,6 +217,50 @@ export function SettingsScreen() {
           }}
           divider
         />
+      </View>
+
+      {/* Integrations section */}
+      <Text style={[styles.sectionHeader, {color: colors.textSecondary}]}>
+        INTEGRATIONS
+      </Text>
+      <View style={[styles.section, {backgroundColor: colors.surface, borderColor: colors.border}]}>
+        <View style={styles.settingsRow}>
+          <View style={styles.rowLeft}>
+            <Text style={[styles.rowLabel, {color: colors.textPrimary}]}>
+              Google Calendar
+            </Text>
+            <Text style={[styles.rowValue, {color: colors.textSecondary}]}>
+              {calendarConnected
+                ? `Connected · ${calendarEmail ?? ''}`
+                : 'Track meeting load as a burnout signal'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={calendarConnected ? handleCalendarDisconnect : handleCalendarConnect}
+            disabled={isCalendarLoading}
+            accessibilityRole="button"
+            accessibilityLabel={calendarConnected ? 'Disconnect Google Calendar' : 'Connect Google Calendar'}
+            style={[
+              styles.calendarBtn,
+              {
+                backgroundColor: calendarConnected
+                  ? colors.border
+                  : colors.primary,
+              },
+            ]}>
+            <Text
+              style={[
+                styles.calendarBtnText,
+                {color: calendarConnected ? colors.textSecondary : '#ffffff'},
+              ]}>
+              {isCalendarLoading
+                ? '…'
+                : calendarConnected
+                ? 'Disconnect'
+                : 'Connect'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Data section */}
@@ -354,6 +444,17 @@ const styles = StyleSheet.create({
   },
   rowChevron: {
     fontSize: FONT_SIZE.xl,
+  },
+  calendarBtn: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: 8,
+    minWidth: 88,
+    alignItems: 'center',
+  },
+  calendarBtnText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
   },
   signOutBtn: {
     marginTop: SPACING.xl,

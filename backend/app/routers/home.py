@@ -44,6 +44,8 @@ class HomeTodayMetrics(BaseModel):
     location_transitions: int | None = None
     noise_level_db_avg: float | None = None
     mood_score: int | None = None
+    stress_source: str | None = None
+    meeting_hours: float | None = None
     communication_count: int | None = None
 
 
@@ -64,11 +66,19 @@ class HomeRiskHistoryItem(BaseModel):
     risk_score: float
 
 
+class DailyGoal(BaseModel):
+    key: str           # "sleep" | "steps" | "mood" | "stress"
+    label: str
+    done: bool
+    detail: str        # e.g. "6.5 / 7 hrs" or "Logged"
+
+
 class HomeResponse(BaseModel):
     risk_assessment: HomeRiskAssessment | None
     today_metrics: HomeTodayMetrics | None
     suggested_intervention: HomeSuggestedIntervention | None
     recent_risk_history: list[HomeRiskHistoryItem]
+    daily_goals: list[DailyGoal]
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
@@ -125,6 +135,8 @@ async def get_home(
             location_transitions=today_metric.location_transitions,
             noise_level_db_avg=today_metric.noise_level_db_avg,
             mood_score=today_metric.mood_score,
+            stress_source=today_metric.stress_source,
+            meeting_hours=today_metric.meeting_hours,
             communication_count=today_metric.communication_count,
         )
 
@@ -181,9 +193,55 @@ async def get_home(
                 )
             )
 
+    # ── Daily goals — derived from today's metrics, no extra DB query needed ──
+    _SLEEP_TARGET = 7.0   # hours
+    _STEPS_TARGET = 7000
+
+    m = today_metric  # shorthand
+    sleep_done = m is not None and m.sleep_hours is not None and m.sleep_hours >= _SLEEP_TARGET
+    steps_done = m is not None and m.steps is not None and m.steps >= _STEPS_TARGET
+    mood_done  = m is not None and m.mood_score is not None
+    stress_done = m is not None and m.stress_source is not None
+
+    daily_goals = [
+        DailyGoal(
+            key="sleep",
+            label=f"Sleep {int(_SLEEP_TARGET)}+ hours",
+            done=sleep_done,
+            detail=(
+                f"{m.sleep_hours:.1f} / {int(_SLEEP_TARGET)} hrs"
+                if m and m.sleep_hours is not None
+                else f"Target: {int(_SLEEP_TARGET)} hrs"
+            ),
+        ),
+        DailyGoal(
+            key="steps",
+            label=f"Walk {_STEPS_TARGET:,} steps",
+            done=steps_done,
+            detail=(
+                f"{m.steps:,} / {_STEPS_TARGET:,}"
+                if m and m.steps is not None
+                else f"Target: {_STEPS_TARGET:,}"
+            ),
+        ),
+        DailyGoal(
+            key="mood",
+            label="Log your mood",
+            done=mood_done,
+            detail="Logged" if mood_done else "Not logged yet",
+        ),
+        DailyGoal(
+            key="stress",
+            label="Check in on stress",
+            done=stress_done,
+            detail="Checked in" if stress_done else "Not logged yet",
+        ),
+    ]
+
     return HomeResponse(
         risk_assessment=risk_assessment,
         today_metrics=today_metrics,
         suggested_intervention=suggested_intervention,
         recent_risk_history=recent_risk_history,
+        daily_goals=daily_goals,
     )

@@ -4,6 +4,8 @@ import authReducer from './authSlice';
 import metricsReducer from './metricsSlice';
 import chatReducer from './chatSlice';
 import consentsReducer from './consentsSlice';
+import goalsReducer from './goalsSlice';
+import calendarReducer from './calendarSlice';
 
 export const store = configureStore({
   reducer: {
@@ -11,6 +13,8 @@ export const store = configureStore({
     metrics: metricsReducer,
     chat: chatReducer,
     consents: consentsReducer,
+    goals: goalsReducer,
+    calendar: calendarReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

@@ -12,6 +12,15 @@ class SleepSource(str, Enum):
     unknown = "unknown"
 
 
+class StressSource(str, Enum):
+    workload = "workload"       # Too much work / study
+    deadlines = "deadlines"     # Upcoming deadlines / exams
+    career = "career"           # Job search / career uncertainty
+    finances = "finances"       # Financial pressure
+    relationships = "relationships"
+    other = "other"
+
+
 class DailyMetricCreate(BaseModel):
     metric_date: date
     steps: int | None = Field(default=None, ge=0, le=100000)
@@ -25,6 +34,8 @@ class DailyMetricCreate(BaseModel):
     location_transitions: int | None = Field(default=None, ge=0, le=100)
     noise_level_db_avg: float | None = Field(default=None, ge=0.0, le=140.0)
     mood_score: int | None = Field(default=None, ge=1, le=5)
+    stress_source: StressSource | None = None
+    meeting_hours: float | None = Field(default=None, ge=0.0, le=24.0)
     communication_count: int | None = Field(default=None, ge=0, le=500)
 
 
@@ -45,6 +56,8 @@ class DailyMetricResponse(BaseModel):
     location_transitions: int | None
     noise_level_db_avg: float | None
     mood_score: int | None
+    stress_source: str | None
+    meeting_hours: float | None
     communication_count: int | None
     created_at: datetime
     updated_at: datetime

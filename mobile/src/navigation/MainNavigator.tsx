@@ -1,5 +1,5 @@
 import React, {useEffect} from 'react';
-import {useColorScheme, Text} from 'react-native';
+import {useColorScheme} from 'react-native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {MainStackParamList, MainTabParamList} from '@/types';
@@ -8,6 +8,7 @@ import {useSessionGuard} from '@/hooks/useSessionGuard';
 import {useAppDispatch} from '@/store';
 import {setConsents} from '@/store/consentsSlice';
 import {consentsApi} from '@/api/escalations';
+import {TabBarIcon} from '@/components/ui/TabBarIcon';
 
 import {HomeScreen} from '@/screens/main/HomeScreen';
 import {InsightsScreen} from '@/screens/main/InsightsScreen';
@@ -23,14 +24,6 @@ import {ConsentUpdateScreen} from '@/screens/account/ConsentUpdateScreen';
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
-function TabIcon({emoji, focused}: {emoji: string; focused: boolean}) {
-  return (
-    <Text style={{fontSize: focused ? 24 : 20, opacity: focused ? 1 : 0.6}}>
-      {emoji}
-    </Text>
-  );
-}
-
 function MainTabs() {
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? COLORS_DARK : COLORS_LIGHT;
@@ -42,20 +35,27 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
+          borderTopWidth: 0.5,
+          height: 64,
+          paddingBottom: 10,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textTertiary,
-        tabBarLabelStyle: {fontSize: 11, fontWeight: '500'},
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+          letterSpacing: 0.2,
+          marginTop: 2,
+        },
       }}>
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji="🏠" focused={focused} />
+          tabBarIcon: ({focused, color}) => (
+            <TabBarIcon name="home" focused={focused} color={color} />
           ),
         }}
       />
@@ -64,8 +64,8 @@ function MainTabs() {
         component={InsightsScreen}
         options={{
           tabBarLabel: 'Insights',
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji="📊" focused={focused} />
+          tabBarIcon: ({focused, color}) => (
+            <TabBarIcon name="analytics" focused={focused} color={color} />
           ),
         }}
       />
@@ -74,8 +74,8 @@ function MainTabs() {
         component={ChatScreen}
         options={{
           tabBarLabel: 'Chat',
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji="💬" focused={focused} />
+          tabBarIcon: ({focused, color}) => (
+            <TabBarIcon name="chatbubble" focused={focused} color={color} />
           ),
         }}
       />
@@ -84,8 +84,8 @@ function MainTabs() {
         component={SettingsScreen}
         options={{
           tabBarLabel: 'Settings',
-          tabBarIcon: ({focused}) => (
-            <TabIcon emoji="⚙️" focused={focused} />
+          tabBarIcon: ({focused, color}) => (
+            <TabBarIcon name="settings" focused={focused} color={color} />
           ),
         }}
       />

@@ -27,7 +27,7 @@ export function RiskCard({riskLevel, lastUpdated, riskScore}: RiskCardProps) {
   return (
     <Card style={styles.card}>
       <Text style={[styles.title, {color: colors.textSecondary}]}>
-        Today's Status
+        Burnout Load
       </Text>
       <View style={styles.row}>
         <View

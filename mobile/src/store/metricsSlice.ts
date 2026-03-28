@@ -1,11 +1,12 @@
 import {createSlice, PayloadAction} from '@reduxjs/toolkit';
-import {DailyMetrics, InterventionEvent, RiskAssessment, RiskHistoryItem} from '@/types';
+import {DailyGoal, DailyMetrics, InterventionEvent, RiskAssessment, RiskHistoryItem} from '@/types';
 
 export interface MetricsState {
   todayMetrics: Partial<DailyMetrics> | null;
   riskAssessment: RiskAssessment | null;
   interventions: InterventionEvent[];
   riskHistory: RiskHistoryItem[];
+  dailyGoals: DailyGoal[];
   isLoadingHome: boolean;
   hasStaleQueueWarning: boolean;
 }
@@ -15,6 +16,7 @@ const initialState: MetricsState = {
   riskAssessment: null,
   interventions: [],
   riskHistory: [],
+  dailyGoals: [],
   isLoadingHome: false,
   hasStaleQueueWarning: false,
 };
@@ -30,11 +32,13 @@ const metricsSlice = createSlice({
         todayMetrics: Partial<DailyMetrics> | null;
         suggestedIntervention: InterventionEvent | null;
         recentRiskHistory: RiskHistoryItem[];
+        dailyGoals: DailyGoal[];
       }>,
     ) {
       state.riskAssessment = action.payload.riskAssessment;
       state.todayMetrics = action.payload.todayMetrics;
       state.riskHistory = action.payload.recentRiskHistory;
+      state.dailyGoals = action.payload.dailyGoals;
       // merge suggested intervention into list
       if (action.payload.suggestedIntervention) {
         const exists = state.interventions.find(

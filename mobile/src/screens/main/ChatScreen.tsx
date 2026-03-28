@@ -142,8 +142,10 @@ export function ChatScreen() {
         message_text: text,
       });
 
-      // Add assistant response
-      dispatch(addMessage(res.data.assistant_message));
+      // Add assistant response (null on crisis — no LLM reply generated)
+      if (res.data.assistant_message) {
+        dispatch(addMessage(res.data.assistant_message));
+      }
 
       // Update session state
       dispatch(

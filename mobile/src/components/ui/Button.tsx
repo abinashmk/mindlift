@@ -46,7 +46,7 @@ export function Button({
   const containerStyle: ViewStyle = {
     height: CTA_HEIGHT,
     minHeight: MIN_TAPPABLE,
-    borderRadius: BORDER_RADIUS.md,
+    borderRadius: BORDER_RADIUS.lg,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,

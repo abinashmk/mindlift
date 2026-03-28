@@ -39,6 +39,7 @@ async def submit_daily_metrics(
         return existing
 
     sleep_source_val = payload.sleep_source.value if payload.sleep_source else None
+    stress_source_val = payload.stress_source.value if payload.stress_source else None
 
     metric = DailyMetric(
         id=uuid.uuid4(),
@@ -55,6 +56,8 @@ async def submit_daily_metrics(
         location_transitions=payload.location_transitions,
         noise_level_db_avg=payload.noise_level_db_avg,
         mood_score=payload.mood_score,
+        stress_source=stress_source_val,
+        meeting_hours=payload.meeting_hours,
         communication_count=payload.communication_count,
         created_at=now,
         updated_at=now,

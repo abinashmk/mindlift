@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
@@ -9,7 +9,9 @@ from app.core.audit import write_audit_log
 from app.core.limiter import get_user_id_or_ip, limiter
 from app.database import get_db
 from app.models.chat import ChatMessage, ChatSession
+from app.models.drift_alert import DriftAlert
 from app.models.escalation import Escalation
+from app.models.risk import RiskAssessment
 from app.models.user import User, UserConsent
 from app.schemas.chat import (
     ChatMessageResponse,
@@ -17,11 +19,84 @@ from app.schemas.chat import (
     CreateSessionRequest,
     MessagesListResponse,
     SendMessageRequest,
+    SendMessageResponse,
+    SessionSummary,
 )
 from app.services.auth import get_current_user
 from app.services.crisis_classifier import classify
+from app.services.llm import generate_chat_reply, generate_greeting
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+_LEVEL_LABELS = {
+    "GREEN": "low",
+    "YELLOW": "moderate",
+    "ORANGE": "elevated",
+    "RED": "high",
+    "UNDEFINED": "not yet calculated",
+}
+
+_DRIFT_COPY = {
+    ("sleep_hours", "decline"): "sleep has been below their normal level",
+    ("sleep_hours", "improvement"): "sleep has improved above their normal level",
+    ("steps", "decline"): "physical activity has dropped below their normal level",
+    ("steps", "improvement"): "physical activity has been higher than usual",
+    ("meeting_hours", "improvement"): "calendar has been unusually packed with meetings",
+    ("meeting_hours", "decline"): "meeting load has been lighter than usual",
+}
+
+
+async def _build_burnout_context(
+    user_id: uuid.UUID,
+    db: AsyncSession,
+) -> str | None:
+    """
+    Compose a plain-language burnout context string from the user's latest
+    risk assessment and any active drift alerts (last 3 days).
+    Returns None if there is no risk data yet.
+    """
+    risk_result = await db.execute(
+        select(RiskAssessment)
+        .where(RiskAssessment.user_id == user_id)
+        .order_by(RiskAssessment.assessment_time.desc())
+        .limit(1)
+    )
+    latest_risk: RiskAssessment | None = risk_result.scalar_one_or_none()
+    if not latest_risk:
+        return None
+
+    level_label = _LEVEL_LABELS.get(latest_risk.risk_level, "unknown")
+    score_pct = round(latest_risk.risk_score * 100)
+    lines = [
+        f"The user's current burnout load is {level_label} ({score_pct}%)."
+    ]
+
+    # Active drift signals (last 3 days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=3)
+    drift_result = await db.execute(
+        select(DriftAlert)
+        .where(
+            DriftAlert.user_id == user_id,
+            DriftAlert.created_at >= cutoff,
+        )
+        .order_by(DriftAlert.created_at.desc())
+    )
+    recent_alerts = drift_result.scalars().all()
+
+    seen: set[tuple[str, str]] = set()
+    signal_lines: list[str] = []
+    for alert in recent_alerts:
+        key = (alert.metric_key, alert.direction)
+        if key not in seen:
+            seen.add(key)
+            copy = _DRIFT_COPY.get(key)
+            if copy:
+                signal_lines.append(f"Their {copy} recently.")
+
+    if signal_lines:
+        lines.append("Recent signals: " + " ".join(signal_lines))
+
+    return " ".join(lines)
 
 
 async def _chat_logging_accepted(user: User, db: AsyncSession) -> bool:
@@ -55,12 +130,27 @@ async def create_session(
     )
     db.add(session)
     await db.flush()
+
+    # Generate and store an opening greeting so the chat screen isn't blank
+    greeting_text = await generate_greeting(current_user.first_name or "there")
+    greeting_msg = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        sender_type="assistant",
+        message_text=greeting_text,
+        message_length=len(greeting_text),
+        classifier_result=None,
+        created_at=now,
+    )
+    db.add(greeting_msg)
+    await db.flush()
+
     return session
 
 
 @router.post(
     "/sessions/{session_id}/messages",
-    response_model=ChatMessageResponse,
+    response_model=SendMessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit("30/minute", key_func=get_user_id_or_ip)
@@ -103,7 +193,7 @@ async def send_message(
     store_length = len(payload.message_text)
 
     now = datetime.now(timezone.utc)
-    message = ChatMessage(
+    user_message = ChatMessage(
         id=uuid.uuid4(),
         session_id=session.id,
         sender_type="user",
@@ -112,16 +202,15 @@ async def send_message(
         classifier_result=classifier_result,
         created_at=now,
     )
-    db.add(message)
+    db.add(user_message)
 
-    # If crisis detected: flag session and update user state.
+    # Crisis path: flag session, create escalation, no LLM reply (spec §24.4)
     if classifier_result["crisis"]:
         session.crisis_flag = True
         session.state = "CRISIS"
         current_user.state = "CRISIS"
         current_user.updated_at = now
 
-        # Create escalation record
         escalation = Escalation(
             id=uuid.uuid4(),
             user_id=current_user.id,
@@ -148,8 +237,64 @@ async def send_message(
             extra={"user_id": str(current_user.id), "patterns": classifier_result["matched_patterns"]},
         )
 
+        await db.flush()
+        return SendMessageResponse(
+            assistant_message=None,
+            session=SessionSummary(
+                session_id=session.id,
+                state=session.state,
+                crisis_flag=session.crisis_flag,
+            ),
+        )
+
+    # Normal path: fetch recent history and generate LLM reply (spec §23)
+    history_result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session.id)
+        .order_by(ChatMessage.created_at.asc())
+        .limit(20)
+    )
+    prior_messages = history_result.scalars().all()
+
+    # Convert prior messages to anthropic format (skip messages with no text)
+    history: list[dict[str, str]] = []
+    for m in prior_messages:
+        if m.message_text and m.sender_type in ("user", "assistant"):
+            history.append({"role": m.sender_type, "content": m.message_text})
+
+    burnout_context = await _build_burnout_context(current_user.id, db)
+    reply_text = await generate_chat_reply(history, payload.message_text, burnout_context)
+
+    assistant_msg = ChatMessage(
+        id=uuid.uuid4(),
+        session_id=session.id,
+        sender_type="assistant",
+        message_text=reply_text if logging_ok else None,
+        message_length=len(reply_text),
+        classifier_result=None,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(assistant_msg)
+
     await db.flush()
-    return message
+    # Always return the reply text to the client; logging_ok only controls
+    # whether the text is persisted server-side for support-agent review.
+    return SendMessageResponse(
+        assistant_message=ChatMessageResponse(
+            id=assistant_msg.id,
+            session_id=assistant_msg.session_id,
+            sender_type=assistant_msg.sender_type,
+            message_text=reply_text,
+            message_length=assistant_msg.message_length,
+            classifier_result=assistant_msg.classifier_result,
+            created_at=assistant_msg.created_at,
+        ),
+        session=SessionSummary(
+            session_id=session.id,
+            state=session.state,
+            crisis_flag=session.crisis_flag,
+        ),
+    )
 
 
 @router.get("/sessions/{session_id}/messages", response_model=MessagesListResponse)
