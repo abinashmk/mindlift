@@ -1,5 +1,4 @@
 """Unit tests for the pure risk engine logic (no DB required)."""
-import pytest
 
 from app.services.risk_engine import (
     BaselineEntry,
@@ -198,13 +197,13 @@ class TestComputeRisk:
     def test_red_for_severely_degraded_day(self):
         baselines = self._healthy_baselines()
         result = compute_risk(
-            sleep_hours=3.0,      # z = -4.5 => 1.0
-            steps=500,            # z = -5 => 1.0
+            sleep_hours=3.0,  # z = -4.5 => 1.0
+            steps=500,  # z = -5 => 1.0
             screen_time_minutes=400,  # z = 7 => 1.0
             resting_heart_rate_bpm=90,  # z = 5 => 1.0
-            hrv_ms=10,            # z = -3.5 => 1.0
-            location_home_ratio=0.98,   # z = 4.8 => 1.0
-            mood_score=1,         # z = -5 => 1.0
+            hrv_ms=10,  # z = -3.5 => 1.0
+            location_home_ratio=0.98,  # z = 4.8 => 1.0
+            mood_score=1,  # z = -5 => 1.0
             communication_count=0,  # z = -3 => 1.0
             baselines=baselines,
         )

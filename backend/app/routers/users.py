@@ -1,13 +1,18 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log
 from app.database import get_db
 from app.models.user import User, UserConsent
-from app.schemas.user import ConsentRequest, ConsentResponse, UpdateUserRequest, UserResponse
+from app.schemas.user import (
+    ConsentRequest,
+    ConsentResponse,
+    UpdateUserRequest,
+    UserResponse,
+)
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -53,7 +58,9 @@ async def delete_me(
     return None
 
 
-@router.post("/me/consents", response_model=ConsentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/me/consents", response_model=ConsentResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_consent(
     payload: ConsentRequest,
     current_user: User = Depends(get_current_user),

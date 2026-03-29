@@ -1,0 +1,9 @@
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# F821: Undefined name — false positives from SQLAlchemy string-based forward references
+#        in Mapped["ModelName"] relationship annotations.
+# E712: Avoid equality comparisons to True/False — SQLAlchemy ORM requires == True / == False
+#        to generate correct SQL (IS TRUE / = 1); plain truthiness checks do not work.
+ignore = ["F821", "E712"]

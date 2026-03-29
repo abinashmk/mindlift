@@ -74,7 +74,10 @@ async def register(
         entity_id=user.id,
         extra={"email": user.email},
     )
-    return {"id": str(user.id), "message": "Registration successful. Please verify your email."}
+    return {
+        "id": str(user.id),
+        "message": "Registration successful. Please verify your email.",
+    }
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -143,7 +146,9 @@ async def mfa_verify(
         raise HTTPException(status_code=404, detail="User not found.")
 
     if not user.mfa_secret:
-        raise HTTPException(status_code=400, detail="MFA not configured for this account.")
+        raise HTTPException(
+            status_code=400, detail="MFA not configured for this account."
+        )
 
     totp = pyotp.TOTP(user.mfa_secret)
     if not totp.verify(payload.otp_code, valid_window=1):
@@ -185,7 +190,9 @@ async def verify_email(
     try:
         token_data = decode_token(payload.token)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification token.")
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification token."
+        )
 
     if token_data.get("type") != "email_verify":
         raise HTTPException(status_code=400, detail="Invalid token type.")
@@ -246,7 +253,11 @@ async def forgot_password(
         try:
             send_password_reset_email(user.email, reset_url)
         except Exception as email_exc:
-            logger.warning("[forgot-password] email send failed for %s: %s", payload.email, email_exc)
+            logger.warning(
+                "[forgot-password] email send failed for %s: %s",
+                payload.email,
+                email_exc,
+            )
 
     return {"message": "If that email exists, a reset link has been sent."}
 

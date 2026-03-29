@@ -15,8 +15,12 @@ def _utcnow() -> datetime:
 class Intervention(Base):
     __tablename__ = "interventions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    code: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -38,14 +42,18 @@ class Intervention(Base):
 class InterventionEvent(Base):
     __tablename__ = "intervention_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     intervention_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("interventions.id"), nullable=False
     )
-    triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    triggered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     risk_level: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="TRIGGERED")
     completed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -58,4 +66,6 @@ class InterventionEvent(Base):
     )
 
     user: Mapped["User"] = relationship("User", back_populates="intervention_events")
-    intervention: Mapped["Intervention"] = relationship("Intervention", back_populates="events")
+    intervention: Mapped["Intervention"] = relationship(
+        "Intervention", back_populates="events"
+    )

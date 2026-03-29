@@ -4,6 +4,7 @@ GET /home — aggregated home screen data for the mobile app.
 Returns the latest risk assessment, today's metrics, a suggested intervention,
 and the last 7 days of risk history in a single request.
 """
+
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -22,6 +23,7 @@ router = APIRouter(tags=["home"])
 
 
 # ─── Response schemas ─────────────────────────────────────────────────────────
+
 
 class HomeRiskAssessment(BaseModel):
     assessment_time: datetime
@@ -67,10 +69,10 @@ class HomeRiskHistoryItem(BaseModel):
 
 
 class DailyGoal(BaseModel):
-    key: str           # "sleep" | "steps" | "mood" | "stress"
+    key: str  # "sleep" | "steps" | "mood" | "stress"
     label: str
     done: bool
-    detail: str        # e.g. "6.5 / 7 hrs" or "Logged"
+    detail: str  # e.g. "6.5 / 7 hrs" or "Logged"
 
 
 class HomeResponse(BaseModel):
@@ -82,6 +84,7 @@ class HomeResponse(BaseModel):
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/home", response_model=HomeResponse)
 async def get_home(
@@ -194,13 +197,15 @@ async def get_home(
             )
 
     # ── Daily goals — derived from today's metrics, no extra DB query needed ──
-    _SLEEP_TARGET = 7.0   # hours
+    _SLEEP_TARGET = 7.0  # hours
     _STEPS_TARGET = 7000
 
     m = today_metric  # shorthand
-    sleep_done = m is not None and m.sleep_hours is not None and m.sleep_hours >= _SLEEP_TARGET
+    sleep_done = (
+        m is not None and m.sleep_hours is not None and m.sleep_hours >= _SLEEP_TARGET
+    )
     steps_done = m is not None and m.steps is not None and m.steps >= _STEPS_TARGET
-    mood_done  = m is not None and m.mood_score is not None
+    mood_done = m is not None and m.mood_score is not None
     stress_done = m is not None and m.stress_source is not None
 
     daily_goals = [

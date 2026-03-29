@@ -1,10 +1,10 @@
 """
 Pydantic schemas for the support dashboard API.
 """
+
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any
 
 from pydantic import BaseModel, EmailStr
 
@@ -32,8 +32,8 @@ class SupportLoginRequest(BaseModel):
 
 
 class SupportMFAVerifyRequest(BaseModel):
-    mfa_token: str   # short-lived support_mfa_pending token
-    otp_code: str    # 6-digit TOTP code
+    mfa_token: str  # short-lived support_mfa_pending token
+    otp_code: str  # 6-digit TOTP code
 
 
 class SupportTokenResponse(BaseModel):
@@ -62,7 +62,7 @@ class EscalationAssignRequest(BaseModel):
 
 
 class EscalationMessageRequest(BaseModel):
-    template_key: str   # must match one of PREDEFINED_TEMPLATES
+    template_key: str  # must match one of PREDEFINED_TEMPLATES
 
 
 class SupportEscalationResponse(BaseModel):

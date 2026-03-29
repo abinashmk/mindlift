@@ -13,12 +13,10 @@ Covers:
   - set_crisis_keywords() overwrites and invalidates cache
   - get_crisis_keywords() returns current list
 """
+
 import json
 import time
 from unittest.mock import MagicMock, patch
-
-
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +27,7 @@ import pytest
 def _clear_module_cache():
     """Reset the module-level _cache variable to None between tests."""
     import app.services.crisis_classifier as cc
+
     cc._cache = None
 
 
@@ -92,7 +91,9 @@ class TestClassify:
             mock_redis.get.return_value = json.dumps(["hurt myself"])
             mock_redis_factory.return_value = mock_redis
 
-            result = classify("Sometimes I feel like I want to hurt myself and nobody cares.")
+            result = classify(
+                "Sometimes I feel like I want to hurt myself and nobody cares."
+            )
             assert result["crisis"] is True
 
     def test_multiple_patterns_can_match(self):
@@ -171,7 +172,7 @@ class TestRedisUnavailable:
 
     def test_falls_back_to_defaults_when_redis_unavailable(self):
         """If Redis throws, defaults are used and classify still works."""
-        from app.services.crisis_classifier import classify, _DEFAULT_PATTERNS
+        from app.services.crisis_classifier import classify
 
         with patch(
             "app.services.crisis_classifier._get_redis_sync",
@@ -271,7 +272,6 @@ class TestSetAndGetKeywords:
     def test_classify_uses_new_keywords_after_set(self):
         """After set_crisis_keywords, classify should use the new list."""
         from app.services.crisis_classifier import classify, set_crisis_keywords
-        import app.services.crisis_classifier as cc
 
         with patch(
             "app.services.crisis_classifier._get_redis_sync"

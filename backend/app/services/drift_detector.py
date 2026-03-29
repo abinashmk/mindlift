@@ -82,7 +82,7 @@ _NOTIFICATION_COPY: dict[tuple[str, str], tuple[str, str]] = {
 class DriftResult:
     user_id: uuid.UUID
     metric_key: str
-    direction: str          # "decline" | "improvement"
+    direction: str  # "decline" | "improvement"
     rolling_avg: float
     baseline_mean: float
     z_score: float
@@ -152,8 +152,11 @@ async def detect_drift_for_user(
         # Cooldown check — suppress if we already alerted recently
         cooldown_start = today - timedelta(days=_COOLDOWN_DAYS)
         from datetime import datetime, timezone
+
         cooldown_dt = datetime(
-            cooldown_start.year, cooldown_start.month, cooldown_start.day,
+            cooldown_start.year,
+            cooldown_start.month,
+            cooldown_start.day,
             tzinfo=timezone.utc,
         )
         existing = await db.execute(

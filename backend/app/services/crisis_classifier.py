@@ -12,6 +12,7 @@ Updating keywords at runtime:
   Call `set_crisis_keywords(patterns)` (used by the admin endpoint) or
   write the JSON array directly to Redis at key `crisis:keywords`.
 """
+
 from __future__ import annotations
 
 import json
@@ -57,6 +58,7 @@ def _get_redis_sync():
     """Return a synchronous Redis client (used inside sync classify())."""
     import redis as sync_redis
     from app.config import settings
+
     return sync_redis.from_url(settings.redis_url, decode_responses=True)
 
 

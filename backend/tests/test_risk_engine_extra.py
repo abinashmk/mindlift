@@ -10,6 +10,7 @@ Covers paths not reached by test_risk_engine.py:
   - score boundary precision (exactly 0.30, 0.60, 0.80)
   - _zscore with zero std (uses 0.01 minimum)
 """
+
 import pytest
 
 from app.services.risk_engine import (
@@ -21,7 +22,6 @@ from app.services.risk_engine import (
     compute_activity_score,
     compute_heart_score,
     compute_risk,
-    compute_sleep_score,
     compute_social_score,
     score_to_risk_level,
 )
@@ -71,12 +71,16 @@ class TestRedistributeWeights:
         assert result == {}
 
     def test_single_group_gets_full_weight(self):
-        result = _redistribute_weights({"sleep": 0.5, "activity": None, "heart": None, "social": None})
+        result = _redistribute_weights(
+            {"sleep": 0.5, "activity": None, "heart": None, "social": None}
+        )
         assert "sleep" in result
         assert result["sleep"] == pytest.approx(1.0)
 
     def test_two_groups_weights_sum_to_one(self):
-        result = _redistribute_weights({"sleep": 0.5, "activity": 0.5, "heart": None, "social": None})
+        result = _redistribute_weights(
+            {"sleep": 0.5, "activity": 0.5, "heart": None, "social": None}
+        )
         assert sum(result.values()) == pytest.approx(1.0)
 
 

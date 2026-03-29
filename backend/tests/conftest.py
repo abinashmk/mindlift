@@ -4,11 +4,11 @@ Pytest configuration and shared fixtures for MindLift backend tests.
 Uses an in-memory SQLite DB via aiosqlite for fast, dependency-free test runs.
 Set TEST_DATABASE_URL env var to point at a real PostgreSQL instance if needed.
 """
+
 import os
 import uuid
 from datetime import datetime, timezone
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -57,7 +57,9 @@ async def client(engine):
                 raise
 
     app.dependency_overrides[get_db] = override_get_db
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         yield ac
     app.dependency_overrides.clear()
 

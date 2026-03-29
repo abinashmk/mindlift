@@ -7,6 +7,7 @@ Verifies:
   - GET /v1/support/system-health returns expected fields (db_status, redis_status,
     open_escalations_new, open_escalations_ack, open_escalations_in_progress)
 """
+
 import uuid
 from datetime import datetime, timezone
 

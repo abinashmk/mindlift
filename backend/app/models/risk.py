@@ -18,11 +18,15 @@ class RiskAssessment(Base):
         Index("idx_risk_assessments_user_time", "user_id", "assessment_time"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    assessment_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    assessment_time: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
     assessment_scope: Mapped[str] = mapped_column(String(20), nullable=False)
     risk_score: Mapped[float] = mapped_column(Double, nullable=False)
     risk_level: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -30,7 +34,9 @@ class RiskAssessment(Base):
     feature_activity_score: Mapped[float | None] = mapped_column(Double, nullable=True)
     feature_heart_score: Mapped[float | None] = mapped_column(Double, nullable=True)
     feature_social_score: Mapped[float | None] = mapped_column(Double, nullable=True)
-    contributing_features: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    contributing_features: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     model_version: Mapped[str] = mapped_column(String(50), nullable=False)
     baseline_complete: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

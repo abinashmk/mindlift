@@ -8,13 +8,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.metrics import DailyMetric
 from app.models.user import User
-from app.schemas.metrics import DailyMetricCreate, DailyMetricResponse, MetricsListResponse
+from app.schemas.metrics import (
+    DailyMetricCreate,
+    DailyMetricResponse,
+    MetricsListResponse,
+)
 from app.services.auth import get_current_user
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
-@router.post("/daily", response_model=DailyMetricResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/daily", response_model=DailyMetricResponse, status_code=status.HTTP_201_CREATED
+)
 async def submit_daily_metrics(
     payload: DailyMetricCreate,
     current_user: User = Depends(get_current_user),
@@ -32,7 +38,9 @@ async def submit_daily_metrics(
     now = datetime.now(timezone.utc)
 
     if existing:
-        for field, value in payload.model_dump(exclude_none=True, exclude={"metric_date"}).items():
+        for field, value in payload.model_dump(
+            exclude_none=True, exclude={"metric_date"}
+        ).items():
             setattr(existing, field, value)
         existing.updated_at = now
         await db.flush()
@@ -89,8 +97,10 @@ async def list_daily_metrics(
     # Total count
     from sqlalchemy import func
 
-    count_query = select(func.count()).select_from(DailyMetric).where(
-        DailyMetric.user_id == current_user.id
+    count_query = (
+        select(func.count())
+        .select_from(DailyMetric)
+        .where(DailyMetric.user_id == current_user.id)
     )
     if start_date:
         count_query = count_query.where(DailyMetric.metric_date >= start_date)

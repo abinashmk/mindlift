@@ -7,12 +7,12 @@ Rules:
 - Nightly recompute: trailing 28 valid days, RED-risk days excluded.
 - mean = arithmetic mean, std = sample std (ddof=1), if std==0 replace with 0.01.
 """
+
 from __future__ import annotations
 
 import math
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,12 @@ _GROUP_FEATURES: dict[str, list[str]] = {
     "sleep": ["sleep_hours"],
     "activity": ["steps", "screen_time_minutes"],
     "heart": ["resting_heart_rate_bpm", "average_heart_rate_bpm", "hrv_ms"],
-    "social": ["location_home_ratio", "location_transitions", "mood_score", "communication_count"],
+    "social": [
+        "location_home_ratio",
+        "location_transitions",
+        "mood_score",
+        "communication_count",
+    ],
 }
 
 # All numeric features that get their own baseline entry.
@@ -100,8 +105,7 @@ async def recompute_nightly_baseline(user_id: uuid.UUID, db: AsyncSession) -> No
     # Load risk assessments to identify RED days.
     red_dates: set[date] = set()
     risk_result = await db.execute(
-        select(RiskAssessment)
-        .where(
+        select(RiskAssessment).where(
             RiskAssessment.user_id == user_id,
             RiskAssessment.risk_level == "RED",
         )

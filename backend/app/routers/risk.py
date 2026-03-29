@@ -4,6 +4,7 @@ Risk assessment endpoints.
 GET /risk/current  — latest risk assessment for the current user
 GET /risk/history  — last N days of risk assessments (default 30, max 90)
 """
+
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -39,7 +40,9 @@ async def get_current_risk(
 
 @router.get("/history", response_model=list[RiskAssessmentResponse])
 async def get_risk_history(
-    days: int = Query(default=30, ge=1, le=90, description="Number of past days to return."),
+    days: int = Query(
+        default=30, ge=1, le=90, description="Number of past days to return."
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

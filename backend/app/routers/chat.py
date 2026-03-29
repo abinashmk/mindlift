@@ -41,7 +41,10 @@ _DRIFT_COPY = {
     ("sleep_hours", "improvement"): "sleep has improved above their normal level",
     ("steps", "decline"): "physical activity has dropped below their normal level",
     ("steps", "improvement"): "physical activity has been higher than usual",
-    ("meeting_hours", "improvement"): "calendar has been unusually packed with meetings",
+    (
+        "meeting_hours",
+        "improvement",
+    ): "calendar has been unusually packed with meetings",
     ("meeting_hours", "decline"): "meeting load has been lighter than usual",
 }
 
@@ -67,9 +70,7 @@ async def _build_burnout_context(
 
     level_label = _LEVEL_LABELS.get(latest_risk.risk_level, "unknown")
     score_pct = round(latest_risk.risk_score * 100)
-    lines = [
-        f"The user's current burnout load is {level_label} ({score_pct}%)."
-    ]
+    lines = [f"The user's current burnout load is {level_label} ({score_pct}%)."]
 
     # Active drift signals (last 3 days)
     cutoff = datetime.now(timezone.utc) - timedelta(days=3)
@@ -114,7 +115,9 @@ async def _chat_logging_accepted(user: User, db: AsyncSession) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-@router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_session(
     payload: CreateSessionRequest,
     current_user: User = Depends(get_current_user),
@@ -234,7 +237,10 @@ async def send_message(
             action_key="crisis.detected",
             entity_type="chat_session",
             entity_id=session.id,
-            extra={"user_id": str(current_user.id), "patterns": classifier_result["matched_patterns"]},
+            extra={
+                "user_id": str(current_user.id),
+                "patterns": classifier_result["matched_patterns"],
+            },
         )
 
         await db.flush()
@@ -263,7 +269,9 @@ async def send_message(
             history.append({"role": m.sender_type, "content": m.message_text})
 
     burnout_context = await _build_burnout_context(current_user.id, db)
-    reply_text = await generate_chat_reply(history, payload.message_text, burnout_context)
+    reply_text = await generate_chat_reply(
+        history, payload.message_text, burnout_context
+    )
 
     assistant_msg = ChatMessage(
         id=uuid.uuid4(),

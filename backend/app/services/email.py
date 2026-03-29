@@ -2,6 +2,7 @@
 Transactional email sender for MindLift.
 Uses Python's built-in smtplib; SMTP credentials come from settings.
 """
+
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -27,7 +28,10 @@ def _send(recipient_email: str, subject: str, body_text: str, body_html: str) ->
 
 
 def _smtp_configured() -> bool:
-    return bool(settings.smtp_host and not (settings.smtp_host == "localhost" and not settings.smtp_user))
+    return bool(
+        settings.smtp_host
+        and not (settings.smtp_host == "localhost" and not settings.smtp_user)
+    )
 
 
 def send_password_reset_email(recipient_email: str, reset_url: str) -> None:
@@ -36,7 +40,9 @@ def send_password_reset_email(recipient_email: str, reset_url: str) -> None:
     Logs and returns silently if SMTP is not configured.
     """
     if not _smtp_configured():
-        print(f"[email] SMTP not configured — password reset URL for {recipient_email}: {reset_url}")
+        print(
+            f"[email] SMTP not configured — password reset URL for {recipient_email}: {reset_url}"
+        )
         return
 
     subject = "Reset your MindLift password"
@@ -62,7 +68,9 @@ def send_export_ready_email(recipient_email: str, download_url: str) -> None:
     Logs and returns silently if SMTP is not configured (local / dev environment).
     """
     if not _smtp_configured():
-        print(f"[email] SMTP not configured — export URL for {recipient_email}: {download_url}")
+        print(
+            f"[email] SMTP not configured — export URL for {recipient_email}: {download_url}"
+        )
         return
 
     subject = "Your MindLift data export is ready"

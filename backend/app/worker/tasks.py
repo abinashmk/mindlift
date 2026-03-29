@@ -1,6 +1,7 @@
 """
 Celery task definitions for MindLift background processing.
 """
+
 import asyncio
 import uuid
 from datetime import datetime, timezone
@@ -34,6 +35,11 @@ celery_app.conf.update(
             "task": "app.worker.tasks.run_daily_risk_assessments",
             "schedule": crontab(hour=6, minute=0),
         },
+        # Drift detection at 07:00 UTC (after risk assessment)
+        "daily-drift-detection": {
+            "task": "app.worker.tasks.run_drift_detection",
+            "schedule": crontab(hour=7, minute=0),
+        },
     },
 )
 
@@ -47,7 +53,9 @@ def _run_async(coro):
         loop.close()
 
 
-@celery_app.task(name="app.worker.tasks.nightly_baseline_recompute", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.nightly_baseline_recompute", bind=True, max_retries=3
+)
 def nightly_baseline_recompute(self):
     """Recompute baselines for all active users."""
 
@@ -86,7 +94,9 @@ def nightly_baseline_recompute(self):
         raise self.retry(exc=exc, countdown=60 * 5)
 
 
-@celery_app.task(name="app.worker.tasks.run_daily_risk_assessments", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.run_daily_risk_assessments", bind=True, max_retries=3
+)
 def run_daily_risk_assessments(self):
     """Run daily risk assessments for all active users with complete baselines."""
 
@@ -193,7 +203,9 @@ def run_daily_risk_assessments(self):
         raise self.retry(exc=exc, countdown=60 * 5)
 
 
-@celery_app.task(name="app.worker.tasks.send_push_notification", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.send_push_notification", bind=True, max_retries=3
+)
 def send_push_notification(
     self, user_id: str, title: str, body: str, data: dict | None = None
 ):
@@ -241,7 +253,9 @@ def send_push_notification(
     return _run_async(_run())
 
 
-@celery_app.task(name="app.worker.tasks.compute_risk_assessment", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.compute_risk_assessment", bind=True, max_retries=3
+)
 def compute_risk_assessment(self, user_id: str):
     """
     Compute a risk assessment for a single user on demand.
@@ -279,7 +293,9 @@ def compute_risk_assessment(self, user_id: str):
             if not metric:
                 return {"status": "skipped", "reason": "no_metric_for_today"}
 
-            bl_result = await db.execute(select(Baseline).where(Baseline.user_id == uid))
+            bl_result = await db.execute(
+                select(Baseline).where(Baseline.user_id == uid)
+            )
             baselines: dict[str, BaselineEntry] = {
                 b.feature_key: BaselineEntry(
                     mean=b.mean_value, std=b.std_value, valid_days=b.valid_days
@@ -331,7 +347,9 @@ def compute_risk_assessment(self, user_id: str):
         raise self.retry(exc=exc, countdown=30)
 
 
-@celery_app.task(name="app.worker.tasks.run_nightly_baseline_update", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.run_nightly_baseline_update", bind=True, max_retries=3
+)
 def run_nightly_baseline_update(self):
     """
     Alias / explicit export for the nightly baseline recompute task.
@@ -340,7 +358,9 @@ def run_nightly_baseline_update(self):
     return nightly_baseline_recompute()
 
 
-@celery_app.task(name="app.worker.tasks.process_account_deletion", bind=True, max_retries=3)
+@celery_app.task(
+    name="app.worker.tasks.process_account_deletion", bind=True, max_retries=3
+)
 def process_account_deletion(self, user_id: str):
     """
     Permanently purge all data associated with a deleted user.
@@ -441,13 +461,21 @@ def generate_export_zip(self, user_id: str):
 
         uid = uuid.UUID(user_id)
         async with AsyncSessionLocal() as db:
-            user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
+            user = (
+                await db.execute(select(User).where(User.id == uid))
+            ).scalar_one_or_none()
             if not user:
                 return {}
 
             consents = (
-                await db.execute(select(UserConsent).where(UserConsent.user_id == uid))
-            ).scalars().all()
+                (
+                    await db.execute(
+                        select(UserConsent).where(UserConsent.user_id == uid)
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
             chat_logging = any(
                 c.consent_key == "chat_logging_accepted" and c.consent_value
@@ -455,53 +483,77 @@ def generate_export_zip(self, user_id: str):
             )
 
             metrics = (
-                await db.execute(
-                    select(DailyMetric)
-                    .where(DailyMetric.user_id == uid)
-                    .order_by(DailyMetric.metric_date)
+                (
+                    await db.execute(
+                        select(DailyMetric)
+                        .where(DailyMetric.user_id == uid)
+                        .order_by(DailyMetric.metric_date)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             risks = (
-                await db.execute(
-                    select(RiskAssessment)
-                    .where(RiskAssessment.user_id == uid)
-                    .order_by(RiskAssessment.assessment_time)
+                (
+                    await db.execute(
+                        select(RiskAssessment)
+                        .where(RiskAssessment.user_id == uid)
+                        .order_by(RiskAssessment.assessment_time)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             events = (
-                await db.execute(
-                    select(InterventionEvent)
-                    .where(InterventionEvent.user_id == uid)
-                    .order_by(InterventionEvent.triggered_at)
+                (
+                    await db.execute(
+                        select(InterventionEvent)
+                        .where(InterventionEvent.user_id == uid)
+                        .order_by(InterventionEvent.triggered_at)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             escalations = (
-                await db.execute(
-                    select(Escalation)
-                    .where(Escalation.user_id == uid)
-                    .order_by(Escalation.created_at)
+                (
+                    await db.execute(
+                        select(Escalation)
+                        .where(Escalation.user_id == uid)
+                        .order_by(Escalation.created_at)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
             chat_messages: list = []
             if chat_logging:
                 sessions = (
-                    await db.execute(
-                        select(ChatSession).where(ChatSession.user_id == uid)
+                    (
+                        await db.execute(
+                            select(ChatSession).where(ChatSession.user_id == uid)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 session_ids = [s.id for s in sessions]
                 if session_ids:
                     chat_messages = (
-                        await db.execute(
-                            select(ChatMessage)
-                            .where(ChatMessage.session_id.in_(session_ids))
-                            .order_by(ChatMessage.created_at)
+                        (
+                            await db.execute(
+                                select(ChatMessage)
+                                .where(ChatMessage.session_id.in_(session_ids))
+                                .order_by(ChatMessage.created_at)
+                            )
                         )
-                    ).scalars().all()
+                        .scalars()
+                        .all()
+                    )
 
         return {
             "user": user,
@@ -546,10 +598,21 @@ def generate_export_zip(self, user_id: str):
 
             # daily_metrics.csv
             metrics_fields = [
-                "metric_date", "steps", "resting_heart_rate_bpm", "average_heart_rate_bpm",
-                "hrv_ms", "sleep_hours", "sleep_source", "screen_time_minutes",
-                "location_home_ratio", "location_transitions", "noise_level_db_avg",
-                "mood_score", "communication_count", "created_at", "updated_at",
+                "metric_date",
+                "steps",
+                "resting_heart_rate_bpm",
+                "average_heart_rate_bpm",
+                "hrv_ms",
+                "sleep_hours",
+                "sleep_source",
+                "screen_time_minutes",
+                "location_home_ratio",
+                "location_transitions",
+                "noise_level_db_avg",
+                "mood_score",
+                "communication_count",
+                "created_at",
+                "updated_at",
             ]
             metrics_buf = io.StringIO()
             w = csv.DictWriter(metrics_buf, fieldnames=metrics_fields)
@@ -560,9 +623,16 @@ def generate_export_zip(self, user_id: str):
 
             # risk_assessments.csv
             risk_fields = [
-                "assessment_time", "assessment_scope", "risk_score", "risk_level",
-                "feature_sleep_score", "feature_activity_score", "feature_heart_score",
-                "feature_social_score", "baseline_complete", "created_at",
+                "assessment_time",
+                "assessment_scope",
+                "risk_score",
+                "risk_level",
+                "feature_sleep_score",
+                "feature_activity_score",
+                "feature_heart_score",
+                "feature_social_score",
+                "baseline_complete",
+                "created_at",
             ]
             risk_buf = io.StringIO()
             w = csv.DictWriter(risk_buf, fieldnames=risk_fields)
@@ -573,8 +643,14 @@ def generate_export_zip(self, user_id: str):
 
             # intervention_events.csv
             event_fields = [
-                "id", "intervention_id", "triggered_at", "risk_level",
-                "status", "completed", "helpful_rating", "created_at",
+                "id",
+                "intervention_id",
+                "triggered_at",
+                "risk_level",
+                "status",
+                "completed",
+                "helpful_rating",
+                "created_at",
             ]
             event_buf = io.StringIO()
             w = csv.DictWriter(event_buf, fieldnames=event_fields)
@@ -585,8 +661,13 @@ def generate_export_zip(self, user_id: str):
 
             # escalations.csv
             esc_fields = [
-                "id", "source", "status", "risk_level", "created_at",
-                "updated_at", "resolved_at",
+                "id",
+                "source",
+                "status",
+                "risk_level",
+                "created_at",
+                "updated_at",
+                "resolved_at",
             ]
             esc_buf = io.StringIO()
             w = csv.DictWriter(esc_buf, fieldnames=esc_fields)
@@ -598,8 +679,12 @@ def generate_export_zip(self, user_id: str):
             # chat_messages.csv — only when chat logging consent was given
             if data["chat_logging"]:
                 msg_fields = [
-                    "id", "session_id", "sender_type", "message_text",
-                    "message_length", "created_at",
+                    "id",
+                    "session_id",
+                    "sender_type",
+                    "message_text",
+                    "message_length",
+                    "created_at",
                 ]
                 msg_buf = io.StringIO()
                 w = csv.DictWriter(msg_buf, fieldnames=msg_fields)
@@ -630,6 +715,7 @@ def generate_export_zip(self, user_id: str):
         user = data["user"]
         try:
             from app.services.email import send_export_ready_email
+
             send_export_ready_email(user.email, download_url)
         except Exception as email_exc:
             print(f"[export] email send failed user={user_id}: {email_exc}")
@@ -641,7 +727,68 @@ def generate_export_zip(self, user_id: str):
             data={"type": "export_ready"},
         )
 
-        return {"status": "done", "user_id": user_id, "s3_key": s3_key, "download_url": download_url}
+        return {
+            "status": "done",
+            "user_id": user_id,
+            "s3_key": s3_key,
+            "download_url": download_url,
+        }
 
     except Exception as exc:
         raise self.retry(exc=exc, countdown=60)
+
+
+@celery_app.task(name="app.worker.tasks.run_drift_detection", bind=True, max_retries=3)
+def run_drift_detection(self):
+    """
+    Detect sustained sleep/step drift for all active users and send push
+    notifications where warranted. Runs daily at 07:00 UTC.
+    """
+
+    async def _run():
+        from sqlalchemy import select
+
+        from app.database import AsyncSessionLocal
+        from app.models.user import User
+        from app.services.drift_detector import detect_drift_for_user
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(User.id).where(
+                    User.state.in_(["ACTIVE", "LIMITED"]),
+                    User.deleted_at.is_(None),
+                )
+            )
+            user_ids = result.scalars().all()
+
+        notifications_sent = 0
+        for uid in user_ids:
+            try:
+                async with AsyncSessionLocal() as db:
+                    drift_results = await detect_drift_for_user(uid, db)
+                    await db.commit()
+
+                for drift in drift_results:
+                    send_push_notification.delay(
+                        str(drift.user_id),
+                        title=drift.notification_title,
+                        body=drift.notification_body,
+                        data={
+                            "type": "drift_alert",
+                            "metric": drift.metric_key,
+                            "direction": drift.direction,
+                        },
+                    )
+                    notifications_sent += 1
+            except Exception as exc:
+                print(f"[drift] Error for user {uid}: {exc}")
+
+        return {
+            "users_checked": len(user_ids),
+            "notifications_sent": notifications_sent,
+        }
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60 * 5)

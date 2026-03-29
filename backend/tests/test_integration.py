@@ -12,9 +12,10 @@ Covers:
   8. Export request
   9. Delete request
 """
+
 import uuid
 from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -54,7 +55,11 @@ async def test_consent_list(client: AsyncClient, auth_headers: dict):
     # Submit then retrieve
     await client.post(
         "/v1/users/me/consents",
-        json={"consent_key": "location_category_accepted", "consent_value": False, "policy_version": "1.0"},
+        json={
+            "consent_key": "location_category_accepted",
+            "consent_value": False,
+            "policy_version": "1.0",
+        },
         headers=auth_headers,
     )
     resp = await client.get("/v1/users/me/consents", headers=auth_headers)
@@ -165,7 +170,7 @@ def test_missing_feature_redistribution_scores_non_zero():
         "resting_heart_rate_bpm": BaselineEntry(mean=65.0, std=5.0, valid_days=14),
     }
     result = compute_risk(
-        sleep_hours=3.0,              # severely low → high score
+        sleep_hours=3.0,  # severely low → high score
         resting_heart_rate_bpm=90.0,  # severely high → high score
         baselines=baselines,
     )

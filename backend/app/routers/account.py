@@ -4,9 +4,10 @@ Account management endpoints.
 POST /account/export    — enqueue data-export Celery job, return 202
 DELETE /account         — soft-delete account, revoke tokens, enqueue deletion job, return 202
 """
+
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log

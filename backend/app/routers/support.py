@@ -9,12 +9,12 @@ Predefined message templates (from spec):
   - "contact"   : "A support team member will contact you shortly."
   - "emergency" : "Please reach out to emergency services if you are in immediate danger."
 """
+
 import csv
 import io
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -33,7 +33,6 @@ from app.database import get_db
 from app.models.escalation import Escalation
 from app.models.support import AuditLog, SupportUser
 from app.schemas.support import (
-    AuditLogResponse,
     CreateSupportUserRequest,
     EscalationAssignRequest,
     EscalationMessageRequest,
@@ -84,7 +83,9 @@ _TERMINAL_STATUSES = {"RESOLVED", "CLOSED_NO_ACTION"}
 # ---------------------------------------------------------------------------
 
 
-def _support_credentials_error(detail: str = "Invalid or expired token") -> HTTPException:
+def _support_credentials_error(
+    detail: str = "Invalid or expired token",
+) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,
@@ -157,10 +158,14 @@ async def support_login(
     - If MFA is enabled, returns a short-lived mfa_pending token.
     - If MFA is disabled, returns a full access token.
     """
-    result = await db.execute(select(SupportUser).where(SupportUser.email == payload.email))
+    result = await db.execute(
+        select(SupportUser).where(SupportUser.email == payload.email)
+    )
     support_user: SupportUser | None = result.scalar_one_or_none()
 
-    if not support_user or not verify_password(payload.password, support_user.password_hash):
+    if not support_user or not verify_password(
+        payload.password, support_user.password_hash
+    ):
         raise HTTPException(status_code=401, detail="Invalid credentials.")
 
     if not support_user.is_active:
@@ -195,14 +200,20 @@ async def support_mfa_verify(
         raise HTTPException(status_code=400, detail="Invalid token type.")
 
     support_user_id = uuid.UUID(token_data["sub"])
-    result = await db.execute(select(SupportUser).where(SupportUser.id == support_user_id))
+    result = await db.execute(
+        select(SupportUser).where(SupportUser.id == support_user_id)
+    )
     support_user: SupportUser | None = result.scalar_one_or_none()
 
     if not support_user or not support_user.is_active:
-        raise HTTPException(status_code=404, detail="Support user not found or inactive.")
+        raise HTTPException(
+            status_code=404, detail="Support user not found or inactive."
+        )
 
     if not support_user.mfa_secret:
-        raise HTTPException(status_code=400, detail="MFA not configured for this account.")
+        raise HTTPException(
+            status_code=400, detail="MFA not configured for this account."
+        )
 
     totp = pyotp.TOTP(support_user.mfa_secret)
     if not totp.verify(payload.otp_code, valid_window=1):
@@ -233,12 +244,12 @@ async def list_escalations(
     """
     offset = (page - 1) * page_size
 
-    base_query = select(Escalation).where(
-        Escalation.status.notin_(_TERMINAL_STATUSES)
-    )
+    base_query = select(Escalation).where(Escalation.status.notin_(_TERMINAL_STATUSES))
 
     if current_support.role == "support_agent":
-        base_query = base_query.where(Escalation.assigned_agent_id == current_support.id)
+        base_query = base_query.where(
+            Escalation.assigned_agent_id == current_support.id
+        )
 
     # Order: RED first, then ORANGE, then others; within same level newest first
     from sqlalchemy import case
@@ -266,30 +277,42 @@ async def list_escalations(
 
 @router.get("/escalations/export")
 async def export_escalations_csv(
-    current_support: SupportUser = Depends(
-        _require_roles("support_manager", "admin")
-    ),
+    current_support: SupportUser = Depends(_require_roles("support_manager", "admin")),
     db: AsyncSession = Depends(get_db),
 ):
     """Export all escalations as CSV. Manager+ only."""
-    result = await db.execute(
-        select(Escalation).order_by(Escalation.created_at.desc())
-    )
+    result = await db.execute(select(Escalation).order_by(Escalation.created_at.desc()))
     escalations = result.scalars().all()
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "id", "user_id", "source", "status", "risk_level",
-        "assigned_agent_id", "created_at", "updated_at", "resolved_at",
-    ])
+    writer.writerow(
+        [
+            "id",
+            "user_id",
+            "source",
+            "status",
+            "risk_level",
+            "assigned_agent_id",
+            "created_at",
+            "updated_at",
+            "resolved_at",
+        ]
+    )
     for e in escalations:
-        writer.writerow([
-            str(e.id), str(e.user_id), e.source, e.status, e.risk_level,
-            str(e.assigned_agent_id) if e.assigned_agent_id else "",
-            e.created_at.isoformat(), e.updated_at.isoformat(),
-            e.resolved_at.isoformat() if e.resolved_at else "",
-        ])
+        writer.writerow(
+            [
+                str(e.id),
+                str(e.user_id),
+                e.source,
+                e.status,
+                e.risk_level,
+                str(e.assigned_agent_id) if e.assigned_agent_id else "",
+                e.created_at.isoformat(),
+                e.updated_at.isoformat(),
+                e.resolved_at.isoformat() if e.resolved_at else "",
+            ]
+        )
 
     csv_content = output.getvalue()
     return Response(
@@ -306,9 +329,7 @@ async def get_escalation_detail(
     db: AsyncSession = Depends(get_db),
 ):
     """Full escalation detail. Agents can only view their own assigned escalations."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation: Escalation | None = result.scalar_one_or_none()
     if not escalation:
         raise HTTPException(status_code=404, detail="Escalation not found.")
@@ -322,7 +343,9 @@ async def get_escalation_detail(
     return escalation
 
 
-@router.patch("/escalations/{escalation_id}/status", response_model=SupportEscalationResponse)
+@router.patch(
+    "/escalations/{escalation_id}/status", response_model=SupportEscalationResponse
+)
 async def update_escalation_status(
     escalation_id: uuid.UUID,
     payload: EscalationStatusUpdate,
@@ -330,9 +353,7 @@ async def update_escalation_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Transition escalation status. Only valid transitions are allowed."""
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation: Escalation | None = result.scalar_one_or_none()
     if not escalation:
         raise HTTPException(status_code=404, detail="Escalation not found.")
@@ -363,13 +384,13 @@ async def update_escalation_status(
     return escalation
 
 
-@router.patch("/escalations/{escalation_id}/assign", response_model=SupportEscalationResponse)
+@router.patch(
+    "/escalations/{escalation_id}/assign", response_model=SupportEscalationResponse
+)
 async def assign_escalation(
     escalation_id: uuid.UUID,
     payload: EscalationAssignRequest,
-    current_support: SupportUser = Depends(
-        _require_roles("support_manager", "admin")
-    ),
+    current_support: SupportUser = Depends(_require_roles("support_manager", "admin")),
     db: AsyncSession = Depends(get_db),
 ):
     """Assign escalation to an agent. Manager+ only."""
@@ -382,11 +403,11 @@ async def assign_escalation(
     )
     agent: SupportUser | None = agent_result.scalar_one_or_none()
     if not agent:
-        raise HTTPException(status_code=404, detail="Target agent not found or inactive.")
+        raise HTTPException(
+            status_code=404, detail="Target agent not found or inactive."
+        )
 
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation: Escalation | None = result.scalar_one_or_none()
     if not escalation:
         raise HTTPException(status_code=404, detail="Escalation not found.")
@@ -407,7 +428,9 @@ async def assign_escalation(
     return escalation
 
 
-@router.post("/escalations/{escalation_id}/message", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/escalations/{escalation_id}/message", status_code=status.HTTP_201_CREATED
+)
 async def send_template_message(
     escalation_id: uuid.UUID,
     payload: EscalationMessageRequest,
@@ -424,9 +447,7 @@ async def send_template_message(
             ),
         )
 
-    result = await db.execute(
-        select(Escalation).where(Escalation.id == escalation_id)
-    )
+    result = await db.execute(select(Escalation).where(Escalation.id == escalation_id))
     escalation: Escalation | None = result.scalar_one_or_none()
     if not escalation:
         raise HTTPException(status_code=404, detail="Escalation not found.")
@@ -475,9 +496,7 @@ async def list_audit_logs(
     db: AsyncSession = Depends(get_db),
 ):
     """Paginated audit logs. Admin and read_only_auditor only."""
-    count = (
-        await db.execute(select(func.count()).select_from(AuditLog))
-    ).scalar_one()
+    count = (await db.execute(select(func.count()).select_from(AuditLog))).scalar_one()
 
     result = await db.execute(
         select(AuditLog)
@@ -525,7 +544,9 @@ async def system_health(
     async def _count(s: str) -> int:
         return (
             await db.execute(
-                select(func.count()).select_from(Escalation).where(Escalation.status == s)
+                select(func.count())
+                .select_from(Escalation)
+                .where(Escalation.status == s)
             )
         ).scalar_one()
 
@@ -560,7 +581,9 @@ async def list_support_users(
     return result.scalars().all()
 
 
-@router.post("/users", response_model=SupportUserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/users", response_model=SupportUserResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_support_user(
     payload: CreateSupportUserRequest,
     current_support: SupportUser = Depends(_require_roles("admin")),
@@ -608,7 +631,9 @@ async def deactivate_support_user(
 ):
     """Deactivate a support user. Admin only. Cannot deactivate yourself."""
     if user_id == current_support.id:
-        raise HTTPException(status_code=400, detail="Cannot deactivate your own account.")
+        raise HTTPException(
+            status_code=400, detail="Cannot deactivate your own account."
+        )
 
     result = await db.execute(select(SupportUser).where(SupportUser.id == user_id))
     target: SupportUser | None = result.scalar_one_or_none()
@@ -640,6 +665,7 @@ async def get_crisis_keywords(
 ):
     """Return the current server-side crisis keyword list. Admin only."""
     from app.services.crisis_classifier import get_crisis_keywords
+
     return {"keywords": get_crisis_keywords()}
 
 
@@ -656,11 +682,14 @@ async def update_crisis_keywords(
     """
     keywords: list[str] = payload.get("keywords", [])
     if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
-        raise HTTPException(status_code=422, detail="keywords must be a list of strings.")
+        raise HTTPException(
+            status_code=422, detail="keywords must be a list of strings."
+        )
     if len(keywords) == 0:
         raise HTTPException(status_code=422, detail="keywords list must not be empty.")
 
     from app.services.crisis_classifier import set_crisis_keywords
+
     set_crisis_keywords(keywords)
 
     await write_audit_log(
@@ -674,4 +703,3 @@ async def update_crisis_keywords(
     )
     await db.flush()
     return {"updated": True, "count": len(keywords)}
-

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,9 @@ async def list_active_interventions(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Intervention).where(Intervention.active == True).order_by(Intervention.name)
+        select(Intervention)
+        .where(Intervention.active == True)
+        .order_by(Intervention.name)
     )
     return result.scalars().all()
 
@@ -119,7 +121,9 @@ async def complete_event(
 ):
     """Mark an intervention event as COMPLETED with optional helpfulness rating (1-5)."""
     if helpful_rating is not None and not (1 <= helpful_rating <= 5):
-        raise HTTPException(status_code=422, detail="helpful_rating must be between 1 and 5.")
+        raise HTTPException(
+            status_code=422, detail="helpful_rating must be between 1 and 5."
+        )
     event = await _get_event_for_user(event_id, current_user, db)
     event.status = "COMPLETED"
     event.completed = True

@@ -13,10 +13,10 @@ class SleepSource(str, Enum):
 
 
 class StressSource(str, Enum):
-    workload = "workload"       # Too much work / study
-    deadlines = "deadlines"     # Upcoming deadlines / exams
-    career = "career"           # Job search / career uncertainty
-    finances = "finances"       # Financial pressure
+    workload = "workload"  # Too much work / study
+    deadlines = "deadlines"  # Upcoming deadlines / exams
+    career = "career"  # Job search / career uncertainty
+    finances = "finances"  # Financial pressure
     relationships = "relationships"
     other = "other"
 

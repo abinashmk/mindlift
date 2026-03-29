@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Database
-    database_url: str = "postgresql+asyncpg://mindlift:mindlift_secret@localhost:5432/mindlift_db"
+    database_url: str = (
+        "postgresql+asyncpg://mindlift:mindlift_secret@localhost:5432/mindlift_db"
+    )
 
     # Redis / Celery
     redis_url: str = "redis://localhost:6379/0"
@@ -44,14 +46,17 @@ class Settings(BaseSettings):
     aws_s3_bucket: str = "mindlift-exports"
 
     # Push notifications — APNs (iOS)
-    apns_key_id: str = ""          # 10-char Key ID from Apple Developer portal
-    apns_team_id: str = ""         # 10-char Team ID
+    apns_key_id: str = ""  # 10-char Key ID from Apple Developer portal
+    apns_team_id: str = ""  # 10-char Team ID
     apns_bundle_id: str = "app.mindlift"
-    apns_auth_key_pem: str = ""    # Contents of the .p8 private key file (ES256)
+    apns_auth_key_pem: str = ""  # Contents of the .p8 private key file (ES256)
     apns_use_sandbox: bool = True  # False in production
 
     # Push notifications — FCM (Android)
-    fcm_server_key: str = ""       # Firebase Cloud Messaging server key
+    fcm_server_key: str = ""  # Firebase Cloud Messaging server key
+
+    # AI chat
+    anthropic_api_key: str = ""  # Set ANTHROPIC_API_KEY in env
 
     # CORS
     allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]

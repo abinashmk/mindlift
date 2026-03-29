@@ -4,8 +4,8 @@ S3 helpers for MindLift: upload bytes and generate presigned download URLs.
 boto3 uses the standard AWS credential chain (env vars, instance profile,
 Secrets Manager via the SDK — whichever is configured for the environment).
 """
+
 import boto3
-from botocore.exceptions import ClientError
 
 from app.config import settings
 
@@ -14,7 +14,9 @@ def _client():
     return boto3.client("s3", region_name=settings.aws_region)
 
 
-def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+def upload_bytes(
+    key: str, data: bytes, content_type: str = "application/octet-stream"
+) -> None:
     """Upload raw bytes to S3 at the given key."""
     _client().put_object(
         Bucket=settings.aws_s3_bucket,

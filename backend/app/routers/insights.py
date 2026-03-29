@@ -5,6 +5,7 @@ Queries the most recent DriftAlert rows (last 3 days) for the current user,
 then generates a headline and explanation that describes the combination of
 active signals so the mobile app can show an insight card.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -23,11 +24,12 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 
 # ─── Response schema ──────────────────────────────────────────────────────────
 
+
 class PatternSignal(BaseModel):
-    metric_key: str       # "sleep_hours" | "steps"
-    direction: str        # "decline" | "improvement"
-    label: str            # "Sleep" | "Activity"
-    delta_pct: float      # (rolling_avg - baseline_mean) / baseline_mean * 100
+    metric_key: str  # "sleep_hours" | "steps"
+    direction: str  # "decline" | "improvement"
+    label: str  # "Sleep" | "Activity"
+    delta_pct: float  # (rolling_avg - baseline_mean) / baseline_mean * 100
 
 
 class PatternInsightResponse(BaseModel):
@@ -150,6 +152,7 @@ _COPY: dict[frozenset, tuple[str, str]] = {
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/pattern", response_model=PatternInsightResponse)
 async def get_pattern_insight(

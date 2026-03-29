@@ -4,9 +4,9 @@ Risk scoring engine for MindLift.
 Computes a [0, 1] risk score from daily metrics and user baselines,
 then maps the score to a RiskLevel enum.
 """
+
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -127,7 +127,9 @@ def compute_heart_score(
     scores: list[float] = []
     # Use resting_hr if available, else average_hr — only one HR feature contributed
     hr_value = resting_hr if resting_hr is not None else average_hr
-    hr_key = "resting_heart_rate_bpm" if resting_hr is not None else "average_heart_rate_bpm"
+    hr_key = (
+        "resting_heart_rate_bpm" if resting_hr is not None else "average_heart_rate_bpm"
+    )
     if hr_value is not None and hr_key in baselines:
         z = _zscore(hr_value, baselines[hr_key])
         scores.append(_score_high_is_bad(z))
@@ -220,9 +222,15 @@ def compute_risk(
 
     sleep_s = compute_sleep_score(sleep_hours, baselines)
     activity_s = compute_activity_score(steps, screen_time_minutes, baselines)
-    heart_s = compute_heart_score(resting_heart_rate_bpm, average_heart_rate_bpm, hrv_ms, baselines)
+    heart_s = compute_heart_score(
+        resting_heart_rate_bpm, average_heart_rate_bpm, hrv_ms, baselines
+    )
     social_s = compute_social_score(
-        location_home_ratio, location_transitions, mood_score, communication_count, baselines
+        location_home_ratio,
+        location_transitions,
+        mood_score,
+        communication_count,
+        baselines,
     )
 
     group_scores: dict[str, float | None] = {

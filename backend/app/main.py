@@ -9,7 +9,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import settings
 from app.core.limiter import limiter
 from app.routers import auth, chat, devices, escalations, interventions, metrics, users
-from app.routers import risk, account, support, home
+from app.routers import risk, account, support, home, insights
 
 
 @asynccontextmanager
@@ -18,6 +18,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown: close DB engine.
     from app.database import engine
+
     await engine.dispose()
 
 
@@ -62,6 +63,7 @@ app.include_router(escalations.router, prefix=_V1_PREFIX)
 app.include_router(risk.router, prefix=_V1_PREFIX)
 app.include_router(account.router, prefix=_V1_PREFIX)
 app.include_router(home.router, prefix=_V1_PREFIX)
+app.include_router(insights.router, prefix=_V1_PREFIX)
 
 # Support dashboard API router
 app.include_router(support.router, prefix=_V1_PREFIX)

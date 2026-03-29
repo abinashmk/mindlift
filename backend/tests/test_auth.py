@@ -1,4 +1,5 @@
 """Tests for auth registration, login, and token refresh."""
+
 import pytest
 from httpx import AsyncClient
 
@@ -71,7 +72,9 @@ async def test_login_success(client: AsyncClient):
             "age_confirmed_18_plus": True,
         },
     )
-    resp = await client.post("/v1/auth/login", json={"email": email, "password": password})
+    resp = await client.post(
+        "/v1/auth/login", json={"email": email, "password": password}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "access_token" in data
@@ -99,7 +102,9 @@ async def test_refresh_token(client: AsyncClient):
             "age_confirmed_18_plus": True,
         },
     )
-    login = await client.post("/v1/auth/login", json={"email": email, "password": password})
+    login = await client.post(
+        "/v1/auth/login", json={"email": email, "password": password}
+    )
     refresh_token = login.json()["refresh_token"]
 
     resp = await client.post("/v1/auth/refresh", json={"refresh_token": refresh_token})

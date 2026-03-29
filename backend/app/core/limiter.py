@@ -11,6 +11,7 @@ Limits applied (spec §33.6):
   POST /auth/reset-password   — 10/minute per IP
   POST /chat/message          — 30/minute per authenticated user ID
 """
+
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

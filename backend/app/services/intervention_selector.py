@@ -10,6 +10,7 @@ Selection rules per risk level:
 Cooldown: same code cannot auto-trigger more than once in 24 hours.
 Safety:   never trigger during CRISIS state.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -36,7 +37,9 @@ SOCIAL_TEXT = "SOCIAL_TEXT"
 
 async def _get_intervention_by_code(code: str, db: AsyncSession) -> Intervention | None:
     result = await db.execute(
-        select(Intervention).where(Intervention.code == code, Intervention.active == True)
+        select(Intervention).where(
+            Intervention.code == code, Intervention.active == True
+        )
     )
     return result.scalar_one_or_none()
 
@@ -163,7 +166,9 @@ async def select_interventions(
     else:
         # Try SOCIAL_TEXT if user hasn't opted out
         opted_out = await _has_social_opt_out(user, db)
-        if not opted_out and not await _recently_triggered(user.id, SOCIAL_TEXT, _COOLDOWN_HOURS, db):
+        if not opted_out and not await _recently_triggered(
+            user.id, SOCIAL_TEXT, _COOLDOWN_HOURS, db
+        ):
             secondary_code = SOCIAL_TEXT
         else:
             secondary_code = BREATHE_3
