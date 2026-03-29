@@ -15,6 +15,12 @@ import {MainStackParamList, RiskHistoryItem} from '@/types';
 import {metricsApi} from '@/api/metrics';
 import {useAppDispatch, useAppSelector} from '@/store';
 import {setHomeData, setLoadingHome, setMoodScore} from '@/store/metricsSlice';
+import {
+  addCustomGoal,
+  toggleCustomGoal,
+  removeCustomGoal,
+  pruneOldGoals,
+} from '@/store/goalsSlice';
 import {useMetricSync} from '@/hooks/useMetricSync';
 import {RiskCard} from '@/components/RiskCard';
 import {DailyGoalsCard} from '@/components/DailyGoalsCard';
@@ -57,6 +63,7 @@ export function HomeScreen() {
   const {firstName} = useAppSelector(state => state.auth);
   const {todayMetrics, riskAssessment, interventions, riskHistory, dailyGoals, isLoadingHome, hasStaleQueueWarning} =
     useAppSelector(state => state.metrics);
+  const customGoals = useAppSelector(state => state.goals.customGoals);
 
   const [moodPending, setMoodPending] = useState<number | null>(null);
   const [moodSaving, setMoodSaving] = useState(false);
@@ -97,8 +104,19 @@ export function HomeScreen() {
     useCallback(() => {
       loadHomeData();
       loadPatternInsight();
-    }, [loadHomeData, loadPatternInsight]),
+      dispatch(pruneOldGoals(todayISODate()));
+    }, [loadHomeData, loadPatternInsight, dispatch]),
   );
+
+  function handleAddGoal(label: string) {
+    dispatch(
+      addCustomGoal({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        label,
+        date: todayISODate(),
+      }),
+    );
+  }
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -186,12 +204,14 @@ export function HomeScreen() {
       />
 
       {/* 3. Daily Goals */}
-      {dailyGoals.length > 0 && (
-        <>
-          <View style={{height: CARD_VERTICAL_GAP}} />
-          <DailyGoalsCard goals={dailyGoals} />
-        </>
-      )}
+      <View style={{height: CARD_VERTICAL_GAP}} />
+      <DailyGoalsCard
+        healthGoals={dailyGoals}
+        customGoals={customGoals}
+        onAddGoal={handleAddGoal}
+        onToggleGoal={id => dispatch(toggleCustomGoal(id))}
+        onRemoveGoal={id => dispatch(removeCustomGoal(id))}
+      />
 
       {/* 4. Pattern insight — shown only when active drift is detected */}
       {patternInsight && (

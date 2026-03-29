@@ -1,27 +1,46 @@
 import {createSlice, PayloadAction} from '@reduxjs/toolkit';
+import {storage} from './storage';
 
 export interface CustomGoal {
   id: string;
   label: string;
   done: boolean;
-  date: string; // ISO date string YYYY-MM-DD
+  date: string; // YYYY-MM-DD
 }
 
 interface GoalsState {
   customGoals: CustomGoal[];
-  lastResetDate: string; // custom goals are per-day; reset when date changes
+  lastResetDate: string;
 }
 
-const initialState: GoalsState = {
-  customGoals: [],
-  lastResetDate: '',
-};
+const STORAGE_KEY = 'goals_state';
+
+function loadFromStorage(): GoalsState {
+  try {
+    const raw = storage.getString(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return {customGoals: [], lastResetDate: ''};
+}
+
+function persist(state: GoalsState): void {
+  try {
+    storage.set(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+const initialState: GoalsState = loadFromStorage();
 
 const goalsSlice = createSlice({
   name: 'goals',
   initialState,
   reducers: {
-    addCustomGoal(state, action: PayloadAction<{id: string; label: string; date: string}>) {
+    addCustomGoal(
+      state,
+      action: PayloadAction<{id: string; label: string; date: string}>,
+    ) {
       state.customGoals.push({
         id: action.payload.id,
         label: action.payload.label,
@@ -29,18 +48,25 @@ const goalsSlice = createSlice({
         date: action.payload.date,
       });
       state.lastResetDate = action.payload.date;
+      persist({...state, customGoals: [...state.customGoals]});
     },
     toggleCustomGoal(state, action: PayloadAction<string>) {
       const goal = state.customGoals.find(g => g.id === action.payload);
-      if (goal) goal.done = !goal.done;
+      if (goal) {
+        goal.done = !goal.done;
+        persist({...state, customGoals: [...state.customGoals]});
+      }
     },
     removeCustomGoal(state, action: PayloadAction<string>) {
       state.customGoals = state.customGoals.filter(g => g.id !== action.payload);
+      persist({...state, customGoals: [...state.customGoals]});
     },
-    // Called on focus to clear goals from previous days
     pruneOldGoals(state, action: PayloadAction<string>) {
-      state.customGoals = state.customGoals.filter(g => g.date === action.payload);
+      state.customGoals = state.customGoals.filter(
+        g => g.date === action.payload,
+      );
       state.lastResetDate = action.payload;
+      persist({...state, customGoals: [...state.customGoals]});
     },
   },
 });

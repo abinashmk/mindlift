@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.intervention import Intervention, InterventionEvent
 from app.models.user import User
 from app.schemas.intervention import (
+    InterventionEventDetailResponse,
     InterventionEventResponse,
     InterventionResponse,
     UpdateInterventionEventRequest,
@@ -49,7 +50,38 @@ async def list_intervention_events(
     return result.scalars().all()
 
 
-@router.patch("/events/{event_id}", response_model=InterventionEventResponse)
+@router.get("/events/{event_id}", response_model=InterventionEventDetailResponse)
+async def get_event(
+    event_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a single intervention event with joined intervention content."""
+    result = await db.execute(
+        select(InterventionEvent, Intervention)
+        .join(Intervention, InterventionEvent.intervention_id == Intervention.id)
+        .where(
+            InterventionEvent.id == event_id,
+            InterventionEvent.user_id == current_user.id,
+        )
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Intervention event not found.")
+    event, intervention = row
+    return InterventionEventDetailResponse(
+        event_id=str(event.id),
+        code=intervention.code,
+        name=intervention.name,
+        duration_minutes=intervention.duration_minutes,
+        instructions_markdown=intervention.instructions_markdown,
+        status=event.status,
+        triggered_at=event.triggered_at,
+        suggested_reason=None,
+    )
+
+
+@router.patch("/events/{event_id}", response_model=InterventionEventDetailResponse)
 async def update_event(
     event_id: uuid.UUID,
     payload: UpdateInterventionEventRequest,
@@ -57,14 +89,17 @@ async def update_event(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(InterventionEvent).where(
+        select(InterventionEvent, Intervention)
+        .join(Intervention, InterventionEvent.intervention_id == Intervention.id)
+        .where(
             InterventionEvent.id == event_id,
             InterventionEvent.user_id == current_user.id,
         )
     )
-    event: InterventionEvent | None = result.scalar_one_or_none()
-    if not event:
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Intervention event not found.")
+    event, intervention = row
 
     event.status = payload.status.value
     if payload.completed is not None:
@@ -73,7 +108,16 @@ async def update_event(
         event.helpful_rating = payload.helpful_rating
     event.updated_at = datetime.now(timezone.utc)
     await db.flush()
-    return event
+    return InterventionEventDetailResponse(
+        event_id=str(event.id),
+        code=intervention.code,
+        name=intervention.name,
+        duration_minutes=intervention.duration_minutes,
+        instructions_markdown=intervention.instructions_markdown,
+        status=event.status,
+        triggered_at=event.triggered_at,
+        suggested_reason=None,
+    )
 
 
 # ---------------------------------------------------------------------------

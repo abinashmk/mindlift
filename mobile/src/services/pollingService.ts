@@ -17,7 +17,9 @@
  * and `getRetryIntervalMs()` for the offline retry interval.
  */
 
-import {AppState, Platform} from 'react-native';
+import {AppState} from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import DeviceInfo from 'react-native-device-info';
 
 // Polling mode base intervals in ms
 const HIGH_MS = 60 * 1000;
@@ -28,13 +30,22 @@ export const OFFLINE_RETRY_MS = 10 * 60 * 1000; // 10 minutes
 type PollingMode = 'HIGH' | 'MEDIUM' | 'LOW';
 
 // ─── Battery / Power mode detection ──────────────────────────────────────────
-// React Native does not ship a built-in battery API.
-// react-native-device-info provides `getBatteryLevel()` and `isPowerSaveMode()`.
-// If the library is not installed, we fall back to MEDIUM.
 
 async function getBatteryInfo(): Promise<{level: number; powerSave: boolean}> {
-  // react-native-device-info is not installed — fall back to safe defaults.
-  return {level: 1.0, powerSave: false};
+  try {
+    const [level, powerSave] = await Promise.all([
+      DeviceInfo.getBatteryLevel(),
+      DeviceInfo.isPowerSaveMode(),
+    ]);
+    return {
+      // getBatteryLevel() returns -1 on simulators / devices without a battery
+      level: level < 0 ? 1.0 : level,
+      powerSave,
+    };
+  } catch {
+    // Native module unavailable — safe fallback: assume full battery, no power save
+    return {level: 1.0, powerSave: false};
+  }
 }
 
 // ─── Current app visibility ───────────────────────────────────────────────────
@@ -48,10 +59,16 @@ function isBackgrounded(): boolean {
 /**
  * Return the current recommended collection interval in milliseconds.
  *
- * Evaluates battery level, power-save mode, and app visibility, then applies
- * the rules from spec §18.3.
+ * When offline: always returns OFFLINE_RETRY_MS (10 min) per spec §18.3.
+ * When online: evaluates battery level, power-save mode, and app visibility.
  */
 export async function getCollectionIntervalMs(): Promise<number> {
+  // Offline → fixed 10-minute retry regardless of battery or visibility
+  const netState = await NetInfo.fetch();
+  if (!netState.isConnected) {
+    return OFFLINE_RETRY_MS;
+  }
+
   const {level, powerSave} = await getBatteryInfo();
 
   let mode: PollingMode = 'MEDIUM';

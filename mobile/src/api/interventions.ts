@@ -7,12 +7,9 @@ export interface UpdateInterventionPayload {
 }
 
 export const interventionsApi = {
-  getTodayInterventions: () =>
-    apiClient.get<InterventionEvent[]>('/interventions/today'),
-
   getIntervention: (eventId: string) =>
-    apiClient.get<InterventionEvent>(`/interventions/${eventId}`),
+    apiClient.get<InterventionEvent>(`/interventions/events/${eventId}`),
 
   updateIntervention: (eventId: string, payload: UpdateInterventionPayload) =>
-    apiClient.patch<InterventionEvent>(`/interventions/${eventId}`, payload),
+    apiClient.patch<InterventionEvent>(`/interventions/events/${eventId}`, payload),
 };

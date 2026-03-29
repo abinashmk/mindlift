@@ -51,6 +51,19 @@ class InterventionEventResponse(BaseModel):
     updated_at: datetime
 
 
+class InterventionEventDetailResponse(BaseModel):
+    """Joined event + intervention content — used by the mobile detail screen."""
+
+    event_id: str
+    code: str
+    name: str
+    duration_minutes: int
+    instructions_markdown: str
+    status: str
+    triggered_at: datetime
+    suggested_reason: str | None = None
+
+
 class UpdateInterventionEventRequest(BaseModel):
     status: InterventionStatus
     completed: bool | None = None
